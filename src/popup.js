@@ -604,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
       suffix = ` (${branch.aheadBehind})`;
     }
     
-    return `${prefix}${branch.name} → ${lastCommit}${suffix}`;
+    return `${prefix}${branch.name} / ${lastCommit}${suffix}`;
   }
 
   function populateThreadSelector(threadNames) {
