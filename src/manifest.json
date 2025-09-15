@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Google AI Studio Chat Threads",
+  "version": "3.0.0",
+  "description": "Analyzes chat history to generate a thread graph and allows filtering by topic.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://aistudio.google.com/prompts/*",
+    "https://aistudio.google.com/u/*/prompts/*",
+    "https://aistudio.google.com/live/*"
+  ],
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "turndown.min.js",
+        "content_script.js"
+      ],
+      "matches": [
+        "https://aistudio.google.com/prompts/*",
+        "https://aistudio.google.com/u/*/prompts/*",
+        "https://aistudio.google.com/live/*"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

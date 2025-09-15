@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat Threads</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; width: 300px; padding: 15px; background-color: #2c3e50; color: #ecf0f1; margin: 0; text-align: center; }
+    h3 { margin-top: 0; margin-bottom: 20px; color: #3498db; font-weight: 300; }
+    .action-button { width: 100%; padding: 12px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1em; transition: background-color 0.2s ease; }
+    .action-button:hover { background-color: #2980b9; }
+    .info-text { font-size: 0.9em; color: #bdc3c7; margin-top: 10px; line-height: 1.4; }
+    .hidden { display: none; }
+    select { width: 100%; padding: 8px; margin-bottom: 10px; background-color: #34495e; color: #ecf0f1; border: 1px solid #3498db; border-radius: 4px; }
+    code { background-color: #34495e; padding: 2px 6px; border-radius: 3px; font-family: monospace; color: #f39c12; }
+    .progress-container { background-color: #34495e; border-radius: 8px; padding: 20px; margin: 10px 0; border: 2px solid #3498db; }
+    .progress-title { font-weight: bold; color: #3498db; margin-bottom: 10px; }
+    .progress-message { margin: 8px 0; font-size: 0.9em; }
+    .progress-counter { font-weight: bold; color: #2ecc71; }
+    .cancel-button { background-color: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h3 id="mainTitle">Google AI Studio Chat Threads</h3>
+
+  <!-- === Main functionality - hidden when on invalid pages === -->
+  <div id="mainView">
+        <!-- === Progress Indicator (hidden by default) === -->
+        <div id="progressIndicator" class="progress-container hidden">
+          <div class="progress-title">Collecting Messages</div>
+          <div id="scrollProgress" class="progress-message hidden">Scrolling through chat: <span id="scrollCounter" class="progress-counter">0/0</span></div>
+          <div id="messageProgress" class="progress-message">Processing messages: <span id="progressCounter" class="progress-counter">0</span></div>
+          <button id="cancelAnalysisButton" class="cancel-button">Cancel</button>
+        </div>
+
+    <!-- === Section 1: Always Visible === -->
+    <div id="mainControls">
+        <button id="scrollToBottomButton" class="action-button" style="background-color: #9b59b6; margin-bottom: 10px;">Scroll to Bottom</button>
+      <button id="analyzeButton" class="action-button">1. Prepare Analysis Prompt</button>
+      
+      <!-- === Modified Text with English Instruction === -->
+      <p class="info-text">
+        <strong>Tip:</strong> Use "Scroll to Bottom" first to ensure you're at the latest message, then run the analysis.<br><br>
+        This inserts a prompt to generate a graph and prepare threads for filtering.
+      </p>
+    </div>
+
+    <!-- Load Analysis section removed - now handled automatically -->
+
+    <!-- === Section 3: Appears After Loading Analysis === -->
+    <div id="filteringView" class="hidden" style="margin-top: 20px; border-top: 1px solid #34495e; padding-top: 20px;">
+      <h4>Select branch:</h4>
+      <select id="threadSelector"></select>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+        <button id="openThreadButton" class="action-button">Copy branch to clipboard</button>
+        <button id="goToBranchButton" class="action-button" style="background-color: #16a085;">Go to branch</button>
+      </div>
+      
+      <!-- === Mermaid Diagram Section === -->
+      <div id="mermaidSection" class="hidden" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #34495e;">
+        <h4>Visualization Tools:</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+          <button id="copyJsonButton" class="action-button" style="background-color: #f39c12; font-size: 0.9em;">Copy JSON</button>
+          <button id="copyMermaidButton" class="action-button" style="background-color: #9b59b6; font-size: 0.9em;">Copy Mermaid</button>
+          <button id="showGraphButton" class="action-button" style="background-color: #2ecc71; font-size: 0.9em;">Show Graph</button>
+        </div>
+        <p class="info-text" style="font-size: 0.8em; margin-top: 8px;">
+          Use Mermaid code with <a href="https://mermaid.live" target="_blank" style="color: #3498db;">mermaid.live</a> or <a href="https://github.com/mermaid-js/mermaid-live-editor" target="_blank" style="color: #3498db;">online editors</a>
+        </p>
+      </div>
+      
+      <div id="dataManagementSection" class="hidden" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #34495e;">
+        <button id="clearDataButton" class="action-button" style="background-color: #e74c3c;">Clear Data</button>
+        <p id="dataTimestamp" class="info-text" style="font-size: 0.8em; margin-top: 5px;"></p>
+      </div>
+    </div>
+  </div>
+  
+  <div id="incorrectDomainView" class="hidden">
+    <p class="info-text">This plugin works on AI Studio chat pages with URLs like:<br><br>
+    <code>https://aistudio.google.com/prompts/[CHAT_ID]</code><br><br>
+    Please open or create a specific chat to use this extension.</p>
+  </div>
+
+  <!-- Version display in bottom left -->
+  <div style="position: fixed; bottom: 5px; left: 5px; font-size: 0.7em; color: #7f8c8d;">
+    v3.0.0
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
