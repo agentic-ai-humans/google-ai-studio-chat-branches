@@ -801,8 +801,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-  }
 
+  }
   clearDataButton.addEventListener('click', clearAllData);
 
   // Save selected branch when it changes
