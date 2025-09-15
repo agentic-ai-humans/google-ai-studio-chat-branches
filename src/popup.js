@@ -512,8 +512,14 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('AUTO-LOAD: All data sections hidden - no data available');
   }
 
+  function getCurrentChatId() {
+    // This is a helper function to get the current chat ID
+    // Since we're in popup context, we need to ask the content script
+    // For now, return null - the actual ID will be obtained via content script
+    return null;
+  }
+
   function populateThreadSelector(threadNames) {
-    const chatId = getCurrentChatId();
     threadSelector.innerHTML = ''; // Clear the list
     
     // Add default option
@@ -530,15 +536,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Restore previously selected branch if available
-    if (chatId) {
-      chrome.storage.local.get([`selected_branch_${chatId}`], (result) => {
-        const savedBranch = result[`selected_branch_${chatId}`];
-        if (savedBranch && threadNames.includes(savedBranch)) {
-          threadSelector.value = savedBranch;
-          console.log('Restored selected branch:', savedBranch);
-        }
-      });
-    }
+    // Get chatId from content script first
+    sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
+      if (response && response.chatId) {
+        chrome.storage.local.get([`selected_branch_${response.chatId}`], (result) => {
+          const savedBranch = result[`selected_branch_${response.chatId}`];
+          if (savedBranch && threadNames.includes(savedBranch)) {
+            threadSelector.value = savedBranch;
+            console.log('Restored selected branch:', savedBranch);
+          }
+        });
+      }
+    });
   }
 
   // Helper function to safely send messages to content script
@@ -807,10 +816,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Save selected branch when it changes
   threadSelector.addEventListener('change', () => {
     const selectedBranch = threadSelector.value;
-    const chatId = getCurrentChatId();
-    if (chatId && selectedBranch) {
-      chrome.storage.local.set({ [`selected_branch_${chatId}`]: selectedBranch }, () => {
-        console.log('Saved selected branch:', selectedBranch);
+    if (selectedBranch) {
+      // Get chatId from content script first
+      sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
+        if (response && response.chatId) {
+          chrome.storage.local.set({ [`selected_branch_${response.chatId}`]: selectedBranch }, () => {
+            console.log('Saved selected branch:', selectedBranch);
+          });
+        }
       });
     }
   });
