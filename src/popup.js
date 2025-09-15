@@ -802,7 +802,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  }
   clearDataButton.addEventListener('click', clearAllData);
 
   // Save selected branch when it changes
@@ -832,6 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sendResponse({ status: 'ok' });
     }
   });
+  }
 
   initializePopup();
 });
