@@ -519,6 +519,94 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
+  function calculateBranchInfo(threadNames, threadMap, chatHistory) {
+    const branches = [];
+    const messageCount = Object.keys(threadMap).length;
+    
+    // Determine main branch (most common thread name)
+    const threadCounts = {};
+    Object.values(threadMap).forEach(thread => {
+      threadCounts[thread] = (threadCounts[thread] || 0) + 1;
+    });
+    const mainBranch = Object.keys(threadCounts).reduce((a, b) => threadCounts[a] > threadCounts[b] ? a : b);
+    
+    threadNames.forEach(threadName => {
+      const isMain = threadName === mainBranch;
+      const lastMessage = getLastMessageForBranch(threadName, threadMap, chatHistory);
+      const messagePositions = getMessagePositionsForBranch(threadName, threadMap);
+      const mainPositions = getMessagePositionsForBranch(mainBranch, threadMap);
+      
+      // Calculate ahead/behind relative to main branch
+      let aheadBehind = 0;
+      if (!isMain) {
+        const lastMainPosition = Math.max(...mainPositions);
+        const lastBranchPosition = Math.max(...messagePositions);
+        aheadBehind = lastBranchPosition - lastMainPosition;
+      }
+      
+      branches.push({
+        name: threadName,
+        isMain: isMain,
+        lastMessage: lastMessage,
+        messageCount: messagePositions.length,
+        aheadBehind: aheadBehind,
+        lastPosition: Math.max(...messagePositions)
+      });
+    });
+    
+    return branches;
+  }
+
+  function getLastMessageForBranch(threadName, threadMap, chatHistory) {
+    // Find the last message in this branch
+    for (let i = chatHistory.length - 1; i >= 0; i--) {
+      const messageNum = i + 1;
+      if (threadMap[messageNum] === threadName) {
+        return chatHistory[i];
+      }
+    }
+    return null;
+  }
+
+  function getMessagePositionsForBranch(threadName, threadMap) {
+    const positions = [];
+    Object.keys(threadMap).forEach(messageNum => {
+      if (threadMap[messageNum] === threadName) {
+        positions.push(parseInt(messageNum));
+      }
+    });
+    return positions;
+  }
+
+  function sortBranchesGitStyle(branches) {
+    return branches.sort((a, b) => {
+      // Main branch first
+      if (a.isMain && !b.isMain) return -1;
+      if (!a.isMain && b.isMain) return 1;
+      
+      // Then by last activity (most recent first)
+      return b.lastPosition - a.lastPosition;
+    });
+  }
+
+  function formatBranchOption(branch) {
+    const prefix = branch.isMain ? '* ' : '  ';
+    const lastCommit = branch.lastMessage ? 
+      (branch.lastMessage.textContent || branch.lastMessage.richContent || 'Latest message').substring(0, 50) + '...' : 
+      'No messages';
+    
+    let suffix = '';
+    if (branch.isMain) {
+      suffix = ' (current)';
+    } else if (branch.aheadBehind > 0) {
+      suffix = ` (+${branch.aheadBehind})`;
+    } else if (branch.aheadBehind < 0) {
+      suffix = ` (${branch.aheadBehind})`;
+    }
+    
+    return `${prefix}${branch.name} → ${lastCommit}${suffix}`;
+  }
+
   function populateThreadSelector(threadNames) {
     threadSelector.innerHTML = ''; // Clear the list
     
@@ -528,22 +616,45 @@ document.addEventListener('DOMContentLoaded', () => {
     defaultOption.textContent = 'Select a branch...';
     threadSelector.appendChild(defaultOption);
     
-    threadNames.forEach(threadName => {
-      const option = document.createElement('option');
-      option.value = threadName;
-      option.textContent = threadName;
-      threadSelector.appendChild(option);
-    });
-    
-    // Restore previously selected branch if available
-    // Get chatId from content script first
+    // Get chatId and thread map to calculate branch info
     sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
       if (response && response.chatId) {
-        chrome.storage.local.get([`selected_branch_${response.chatId}`], (result) => {
+        chrome.storage.local.get([`thread_map_${response.chatId}`, `chat_history_${response.chatId}`, `selected_branch_${response.chatId}`], (result) => {
+          const threadMap = result[`thread_map_${response.chatId}`];
+          const chatHistory = result[`chat_history_${response.chatId}`];
           const savedBranch = result[`selected_branch_${response.chatId}`];
-          if (savedBranch && threadNames.includes(savedBranch)) {
-            threadSelector.value = savedBranch;
-            console.log('Restored selected branch:', savedBranch);
+          
+          if (threadMap && chatHistory) {
+            const branchInfo = calculateBranchInfo(threadNames, threadMap, chatHistory);
+            
+            // Sort branches by git-style priority (main first, then by activity)
+            const sortedBranches = sortBranchesGitStyle(branchInfo);
+            
+            sortedBranches.forEach(branch => {
+              const option = document.createElement('option');
+              option.value = branch.name;
+              option.textContent = formatBranchOption(branch);
+              threadSelector.appendChild(option);
+            });
+            
+            // Restore previously selected branch
+            if (savedBranch && threadNames.includes(savedBranch)) {
+              threadSelector.value = savedBranch;
+              console.log('Restored selected branch:', savedBranch);
+            }
+          } else {
+            // Fallback to simple format if no thread map available
+            threadNames.forEach(threadName => {
+              const option = document.createElement('option');
+              option.value = threadName;
+              option.textContent = threadName;
+              threadSelector.appendChild(option);
+            });
+            
+            if (savedBranch && threadNames.includes(savedBranch)) {
+              threadSelector.value = savedBranch;
+              console.log('Restored selected branch:', savedBranch);
+            }
           }
         });
       }
