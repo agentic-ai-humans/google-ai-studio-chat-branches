@@ -459,6 +459,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // Prefer JSON to derive branch list (no dependency on branch_map)
       extractedJsonData = storageData[`json_data_${chatId}`] || null;
       extractedMermaidData = storageData[`mermaid_diagram_${chatId}`] || null;
+      
+      console.log('POPUP: Loading data from storage for chatId:', chatId);
+      console.log('POPUP: JSON data available:', !!extractedJsonData);
+      console.log('POPUP: Mermaid data available:', !!extractedMermaidData);
+      if (extractedMermaidData) {
+        console.log('POPUP: Mermaid data preview:', extractedMermaidData.substring(0, 100) + '...');
+      }
 
       let branchNames = [];
       if (extractedJsonData) {
@@ -837,6 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Prefer stored mermaid; fallback to extracting from JSON blob if combined
     const mermaidToCopy = extractedMermaidData || tryExtractMermaidFromJson(extractedJsonData);
     console.log('POPUP: mermaidToCopy:', mermaidToCopy ? mermaidToCopy.substring(0, 100) + '...' : 'null');
+    console.log('POPUP: Using fallback?', !extractedMermaidData && !!tryExtractMermaidFromJson(extractedJsonData));
     
     if (mermaidToCopy) {
       copyToClipboard(mermaidToCopy, 'mermaid');
