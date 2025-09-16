@@ -1130,19 +1130,19 @@ FIRST CODE BLOCK - JSON (structured gitGraph):
 }
 \`\`\`
 
-SECOND CODE BLOCK - MERMAID:
+SECOND CODE BLOCK - MERMAID (no turnIds in Mermaid):
 \`\`\`mermaid
 gitGraph
-   commit message: "turn-XXXX | Branch Name"
+   commit message: "Branch Name"
    branch "New Branch Name"
-   commit message: "turn-YYYY | New Branch Name"
+   commit message: "New Branch Name"
    checkout "main"
 \`\`\`
 
 Rules:
 - JSON actions must include ALL messages with their exact turnIds
 - Use "branch" and "checkout" actions to represent conversation flow
-- Mermaid should match the JSON structure
+- Mermaid should match the JSON structure but MUST NOT contain turnIds (it's only for visualization)
 - Do NOT add any prose outside the code blocks
 
 === CHAT HISTORY TO ANALYZE ===
@@ -1232,7 +1232,7 @@ function watchForAnalysisResponse(scrapedHistory) {
         }
       }
 
-      // Fallback: Try to extract Mermaid and parse commit messages
+      // Fallback: Try to extract Mermaid (visual only, no turnIds parsed)
       let mermaidString = null;
       const mermaidMatch = responseText.match(/```mermaid\s*([\s\S]+?)\s*```/);
       if (mermaidMatch) {
@@ -1241,31 +1241,9 @@ function watchForAnalysisResponse(scrapedHistory) {
 
       if (mermaidString) {
         try {
-          // Parse turnId and branch from commit messages: "turn-XXXX | Branch: Name"
-          const enhancedBranchMap = {};
-          const lines = mermaidString.split(/\r?\n/);
-          for (const line of lines) {
-            const commitMatch = line.match(/commit\s+message:\s*"([^"]+)"/);
-            if (!commitMatch) continue;
-            const messageText = commitMatch[1];
-            const messageParts = messageText.split('|').map(s => s.trim());
-            const turnIdPart = messageParts[0];
-            const branchPart = messageParts.find(p => p.toLowerCase().startsWith('branch:')) || '';
-            const turnId = turnIdPart && turnIdPart.startsWith('turn-') ? turnIdPart : null;
-            const branchName = branchPart ? branchPart.replace(/^[Bb]ranch:\s*/, '') : null;
-            if (!turnId || !branchName) continue;
-
-            const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
-            if (idx !== -1) {
-              const messageNum = idx + 1;
-              enhancedBranchMap[messageNum] = { thread: branchName, turnId };
-            }
-          }
-
           const chatId = getCurrentChatId();
           if (chatId) {
             const storageData = {
-              [`branch_map_${chatId}`]: enhancedBranchMap,
               [`mermaid_diagram_${chatId}`]: mermaidString,
               [`analysis_completed_${chatId}`]: true,
               current_chat_id: chatId
