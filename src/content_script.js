@@ -1135,21 +1135,73 @@ FIRST CODE BLOCK - JSON (structured gitGraph):
     }
   ]
 }
-\`\`\`
-
-SECOND CODE BLOCK - MERMAID (no turnIds in Mermaid):
-\`\`\`mermaid
-gitGraph
-   commit message: "Branch Name"
-   branch "New Branch Name"
-   commit message: "New Branch Name"
-   checkout "main"
-\`\`\`
-
-Rules:
+  Rules:
 - JSON actions must include ALL messages with their exact turnIds
 - Use "branch" and "checkout" actions to represent conversation flow
-- Mermaid should match the JSON structure but MUST NOT contain turnIds (it's only for visualization)
+\`\`\`
+
+SECOND CODE BLOCK - MERMAID gitGraph (no turnIds in Mermaid), example:
+\`\`\`mermaid
+gitGraph
+    commit id: "Initial Context"
+    commit id: "Framework Understood"
+    branch "Paradigm Shifts"
+    commit id: "3 Major Shifts Proposed"
+    commit id: "Shifts Analyzed"
+    checkout main
+    merge "Paradigm Shifts"
+    
+    branch "TOFU Strategy"
+    commit id: "GAIO Plan"
+    commit id: "Adapting GAIO"
+    
+    branch "Service Ladder"
+    commit id: "Program Proposed"
+    commit id: "Ladder Validated"
+    checkout "TOFU Strategy"
+    commit id: "Platform Mapping"
+    merge "Service Ladder"
+    
+    checkout main
+    merge "TOFU Strategy"
+    
+    branch "Cursor Analysis"
+    commit id: "Initial Question"
+    commit id: "Tornado Test on Cursor"
+    
+    branch "Marketing IDE Idea"
+    commit id: "Cursor for Marketing?"
+    commit id: "Slack-First Strategy"
+    commit id: "Platform Risk Raised"
+    commit id: "Mattermost as OS Base"
+    commit id: "Ecosystem Check"
+    checkout "Cursor Analysis"
+    branch "Hacking Cursor"
+    commit id: "Using Cursor as Engine"
+    checkout "Marketing IDE Idea"
+    merge "Hacking Cursor" id: "Headless IDE Synthesis"
+    commit id: "API Feasibility Check"
+    
+    branch "Open Source Engine"
+    commit id: "Quest for OSS Alt"
+    commit id: "Continue.dev Identified"
+    commit id: "Feasibility Check"
+    checkout "Marketing IDE Idea"
+    merge "Open Source Engine" id: "Final Tech Stack"
+    
+    checkout main
+    merge "Marketing IDE Idea"
+    
+    branch "Internal OS Structure"
+    commit id: "Applying IDE Internally"
+    commit id: "Customer-Centric Structure"
+    
+    checkout main
+    merge "Internal OS Structure"
+    commit id: "Final Output"
+
+Rules:
+- Mermaid should match the JSON structure but MUST COMPLY WITH MERMAID gitGraph SYNTAX
 - Do NOT add any prose outside the code blocks
 
 === CHAT HISTORY TO ANALYZE ===

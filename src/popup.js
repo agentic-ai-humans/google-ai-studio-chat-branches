@@ -867,8 +867,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   showGraphButton.addEventListener('click', () => {
+    console.log('POPUP: Show Graph clicked');
     // Prefer stored mermaid; fallback to extracting from JSON blob if combined
     const mermaidToShow = extractedMermaidData || tryExtractMermaidFromJson(extractedJsonData);
+    console.log('POPUP: mermaidToShow available:', !!mermaidToShow);
+    if (mermaidToShow) {
+      console.log('POPUP: Mermaid preview:', mermaidToShow.substring(0, 100) + '...');
+    }
+    
     if (!mermaidToShow) {
       console.log('No Mermaid diagram available to show');
       return;
@@ -877,6 +883,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Always send plain Mermaid code (no JSON config) to mermaid.live
       const simpleBase64 = btoa(mermaidToShow.trim());
       const url = `https://mermaid.live/edit#base64:${simpleBase64}`;
+      console.log('POPUP: Opening mermaid.live with base64 data');
       chrome.tabs.create({ url });
     } catch (err) {
       console.warn('Failed to open mermaid.live with base64 code. Falling back to clipboard.');
