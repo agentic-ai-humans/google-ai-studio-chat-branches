@@ -381,7 +381,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // New function to automatically load available data
+    let isLoadingData = false;
     function autoLoadAvailableData(chatId, chatInfo) {
+      if (isLoadingData) {
+        console.log('AUTO-LOAD: Already loading data, skipping to prevent loop');
+        return;
+      }
+      isLoadingData = true;
       console.log('AUTO-LOAD: Checking for available data for chat:', chatId);
       
       // Check storage data first
@@ -429,6 +435,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
               console.log('AUTO-LOAD: No fresh page data, using storage data');
             }
+            
+            // Reset loading flag
+            isLoadingData = false;
           });
         } else {
           console.log('AUTO-LOAD: Skipping page check - data was recently cleared by user');
@@ -437,6 +446,9 @@ document.addEventListener('DOMContentLoaded', () => {
             hideAllDataSections();
           }
         }
+        
+        // Reset loading flag
+        isLoadingData = false;
       });
     }
 
@@ -986,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (request.action === 'analysisCompleted') {
       // New analysis data is available, reload the popup data
       console.log('POPUP: Analysis completed, reloading data for chatId:', request.chatId);
-      autoLoadAvailableData();
+      autoLoadAvailableData(request.chatId, { chatId: request.chatId, hasAnalysis: true });
       sendResponse({ status: 'ok' });
     }
   });
