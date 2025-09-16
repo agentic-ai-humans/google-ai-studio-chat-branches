@@ -1099,28 +1099,51 @@ async function analyzeAndPrepare() {
 [TASK]
 1.  Read the entire chat history provided below.
 2.  Assign each message turn-id to a thematic branch (e.g., "Extension Debugging", "GitHub Repo").
-3.  Output ONE Mermaid gitGraph code block ONLY (no extra text).
+3.  Output TWO code blocks: JSON (structured gitGraph) and Mermaid visualization.
 
 === OUTPUT FORMAT (STRICT) ===
 
-Your response MUST be exactly one Mermaid block using PROPER gitGraph syntax.
+Your response MUST contain exactly TWO code blocks in this order:
 
-Rules:
-- Use valid Mermaid gitGraph syntax: commit message: "turn-XXXX | Branch: <name> | <optional notes>"
-- Use branch "Name" and checkout "Name" lines as needed.
-- Do NOT use "commit id:" - that's invalid syntax.
-- Do NOT output any JSON. No prose outside the code block.
+FIRST CODE BLOCK - JSON (structured gitGraph):
+\`\`\`json
+{
+  "type": "gitGraph",
+  "actions": [
+    {
+      "type": "commit",
+      "branch": "main",
+      "id": "turn-XXXX",
+      "message": "Branch Name | Optional description",
+      "branch_hint": "Branch Name"
+    },
+    {
+      "type": "branch",
+      "name": "New Branch Name",
+      "from": "main"
+    },
+    {
+      "type": "checkout",
+      "name": "main"
+    }
+  ]
+}
+\`\`\`
 
-Example:
+SECOND CODE BLOCK - MERMAID:
 \`\`\`mermaid
 gitGraph
-   branch "Main"
-   commit message: "turn-AAA111 | Branch: Main"
-   branch "Weather in Gdansk"
-   commit message: "turn-BBB222 | Branch: Weather in Gdansk"
-   checkout "Main"
-   commit message: "turn-CCC333 | Branch: Main"
+   commit message: "turn-XXXX | Branch Name"
+   branch "New Branch Name"
+   commit message: "turn-YYYY | New Branch Name"
+   checkout "main"
 \`\`\`
+
+Rules:
+- JSON actions must include ALL messages with their exact turnIds
+- Use "branch" and "checkout" actions to represent conversation flow
+- Mermaid should match the JSON structure
+- Do NOT add any prose outside the code blocks
 
 === CHAT HISTORY TO ANALYZE ===
 
@@ -1147,7 +1170,66 @@ function watchForAnalysisResponse(scrapedHistory) {
       const contentNode = lastModelTurn.querySelector('ms-cmark-node');
       const responseText = contentNode ? contentNode.innerText.trim() : '';
 
-      // Try to extract Mermaid first (preferred path now)
+      // Try to extract structured JSON first (preferred path)
+      let jsonString = null;
+      const jsonMatch = responseText.match(/```json\s*([\s\S]+?)\s*```/);
+      if (jsonMatch) {
+        jsonString = jsonMatch[1];
+      }
+
+      if (jsonString) {
+        try {
+          const gitGraphData = JSON.parse(jsonString);
+          if (gitGraphData.type === "gitGraph" && Array.isArray(gitGraphData.actions)) {
+            // Parse structured gitGraph JSON
+            const enhancedThreadMap = {};
+            for (const action of gitGraphData.actions) {
+              if (action.type === "commit" && action.id && action.branch_hint) {
+                const turnId = action.id;
+                const branchName = action.branch_hint;
+                
+                const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
+                if (idx !== -1) {
+                  const messageNum = idx + 1;
+                  enhancedThreadMap[messageNum] = { thread: branchName, turnId };
+                }
+              }
+            }
+
+            const chatId = getCurrentChatId();
+            if (chatId) {
+              // Also extract Mermaid for visualization
+              let mermaidString = null;
+              const mermaidMatch = responseText.match(/```mermaid\s*([\s\S]+?)\s*```/);
+              if (mermaidMatch) {
+                mermaidString = mermaidMatch[1];
+              }
+
+              const storageData = {
+                [`thread_map_${chatId}`]: enhancedThreadMap,
+                [`analysis_completed_${chatId}`]: true,
+                current_chat_id: chatId
+              };
+              if (mermaidString) {
+                storageData[`mermaid_diagram_${chatId}`] = mermaidString;
+              }
+              
+              chrome.storage.local.set(storageData);
+              chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
+                console.log("CS: Cleared data_cleared flag for chat:", chatId);
+              });
+              console.log("CS: Saved enhanced thread map from structured gitGraph JSON.");
+            }
+
+            observer.disconnect();
+            return;
+          }
+        } catch (err) {
+          console.error('CS: Failed to parse structured JSON', err);
+        }
+      }
+
+      // Fallback: Try to extract Mermaid and parse commit messages
       let mermaidString = null;
       const mermaidMatch = responseText.match(/```mermaid\s*([\s\S]+?)\s*```/);
       if (mermaidMatch) {
@@ -1189,7 +1271,7 @@ function watchForAnalysisResponse(scrapedHistory) {
             chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
               console.log("CS: Cleared data_cleared flag for chat:", chatId);
             });
-            console.log("CS: Saved enhanced thread map from Mermaid-only output.");
+            console.log("CS: Saved enhanced thread map from Mermaid fallback.");
           }
 
           observer.disconnect();
@@ -1199,18 +1281,11 @@ function watchForAnalysisResponse(scrapedHistory) {
         }
       }
 
-      // Fallback: legacy JSON parsing path (kept for backward compatibility)
-      let jsonString = null;
-      const markdownMatch = responseText.match(/```json\s*([\s\S]+?)\s*```/);
-      if (markdownMatch) {
-        jsonString = markdownMatch[1];
-      } else {
-        const jsonObjectMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonObjectMatch) jsonString = jsonObjectMatch[0];
-      }
-      if (jsonString) {
+      // Final fallback: legacy simple JSON parsing (kept for backward compatibility)
+      const jsonObjectMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonObjectMatch) {
         try {
-          const threadMap = JSON.parse(jsonString);
+          const threadMap = JSON.parse(jsonObjectMatch[0]);
           const enhancedThreadMap = {};
           for (const [key, threadName] of Object.entries(threadMap)) {
             let messageNum = null;
@@ -1238,10 +1313,11 @@ function watchForAnalysisResponse(scrapedHistory) {
               [`analysis_completed_${chatId}`]: true,
               current_chat_id: chatId
             });
+            console.log("CS: Saved enhanced thread map from legacy JSON fallback.");
           }
           observer.disconnect();
         } catch (error) {
-          console.error("CS: Failed to parse JSON from AI response.", error);
+          console.error("CS: Failed to parse legacy JSON from AI response.", error);
         }
       }
   });
