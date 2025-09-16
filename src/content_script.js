@@ -181,9 +181,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ status: 'ok' });
       break;
     case 'loadAnalysis':
-      loadAnalysis(false); // false = no alerts (for auto-loading)
-      sendResponse({ status: 'ok' });
-      break;
+      loadAnalysis(false).then((result) => {
+        sendResponse({ 
+          status: 'ok', 
+          hasJsonData: result && result.hasJsonData,
+          hasMermaidData: result && result.hasMermaidData
+        });
+      }).catch(() => {
+        sendResponse({ status: 'ok', hasJsonData: false, hasMermaidData: false });
+      });
+      return true; // Will respond asynchronously
     case 'loadAnalysisWithAlerts':
       loadAnalysis(true); // true = show alerts (for manual user action)
       sendResponse({ status: 'ok' });
@@ -1430,8 +1437,10 @@ async function loadAnalysis(showAlerts = true) {
     // Notify popup to auto-reload
     safeSendToPopup({ action: 'analysisCompleted', chatId });
     console.log('CS: ===== LOAD ANALYSIS SUCCESS (DOM-first) =====');
+    return { hasJsonData: !!storageData[`json_data_${chatId}`], hasMermaidData: !!storageData[`mermaid_diagram_${chatId}`] };
   } else {
     console.log('CS: INFO - No artifacts extracted from DOM in loadAnalysis');
+    return { hasJsonData: false, hasMermaidData: false };
   }
 }
 

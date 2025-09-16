@@ -420,8 +420,8 @@ document.addEventListener('DOMContentLoaded', () => {
           loadDataFromStorage(storageData, chatId);
         }
         
-        // Only check page for fresh data if user hasn't recently cleared data
-        if (!dataWasCleared) {
+        // Only check page for fresh data if user hasn't recently cleared data AND we don't already have data
+        if (!dataWasCleared && !hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
           console.log('AUTO-LOAD: Checking page for fresh data...');
           sendMessageToContentScript({ action: 'loadAnalysis' }, (pageResult) => {
             console.log('AUTO-LOAD: Page result:', pageResult);
@@ -429,26 +429,29 @@ document.addEventListener('DOMContentLoaded', () => {
               console.log('AUTO-LOAD: Found fresh data on page, loading it');
               // Fresh page data available, load it (this will override storage data)
               loadAnalysisDataFromPage();
-            } else if (!hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
-              console.log('AUTO-LOAD: No data available anywhere');
-              hideAllDataSections();
             } else {
-              console.log('AUTO-LOAD: No fresh page data, using storage data');
+              console.log('AUTO-LOAD: No fresh page data available');
+              hideAllDataSections();
             }
             
             // Reset loading flag
             isLoadingData = false;
           });
         } else {
-          console.log('AUTO-LOAD: Skipping page check - data was recently cleared by user');
+          if (dataWasCleared) {
+            console.log('AUTO-LOAD: Skipping page check - data was recently cleared by user');
+          } else {
+            console.log('AUTO-LOAD: Skipping page check - already have stored data');
+          }
+          
           if (!hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
             console.log('AUTO-LOAD: No stored data available');
             hideAllDataSections();
           }
+          
+          // Reset loading flag
+          isLoadingData = false;
         }
-        
-        // Reset loading flag
-        isLoadingData = false;
       });
     }
 
