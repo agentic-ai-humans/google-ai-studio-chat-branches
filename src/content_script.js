@@ -1094,19 +1094,21 @@ async function analyzeAndPrepare() {
     [`data_created_${chatId}`]: timestamp
   });
 
-  const dualPurposePrompt = `**TASK:** Analyze the chat history below and provide JSON thread mapping + Mermaid visualization in TWO separate code blocks.
+  const dualPurposePrompt = `**TASK:** You are a conversation analysis AI. Your task is to analyze the chat history and provide two outputs: a JSON map of threads and a Mermaid git graph for visualization.
 
-[INSTRUCTIONS & CHAT HISTORY]
-<details>
-  <summary>📋 Click to expand full analysis instructions and chat history</summary>
-  <div style="border: 1px solid #ccc; padding: 15px; margin: 10px 0; background-color: #f9f9f9; color: #333; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto;">
+[TASK]
+1.  Read the entire chat history provided below inside the collapsible section.
+2.  Assign each message turn-id to a thematic thread (e.g., "Extension Debugging", "GitHub Repo").
+3.  First, provide a JSON object that maps each message turn-id to its thread name.
+4.  Second, provide a Mermaid gitGraph visualizing these threads.
 
-=== ANALYSIS INSTRUCTIONS ===
+=== OUTPUT FORMAT ===
 
-You are a highly skilled conversation analysis AI. Your task is to analyze the provided chat history and create two outputs. Each message line includes a stable turn identifier in square brackets like [id: turn-XXXX]. Use it exactly as provided.
+Your output MUST contain two distinct, valid code blocks in this exact order:
+1.  A JSON code block.
+2.  A Mermaid code block.
 
-1. First, provide a JSON object that maps each message's TURN ID to its main conversation branch/topic. The keys MUST be the exact turnIds (e.g., "turn-ABCD1234"), NOT message numbers.
-2. Second, provide a Mermaid gitGraph visualizing these branches.
+Do NOT add any other text or explanations.
 
 FIRST CODE BLOCK - JSON (keys are turnIds):
 \`\`\`json
@@ -1127,48 +1129,11 @@ gitGraph
    ...
 \`\`\`
 
-🚨 ABSOLUTE FORMATTING REQUIREMENTS 🚨
-NO EXCEPTIONS - EVEN FOR VERY LONG CONVERSATIONS:
-
-✅ REQUIRED: TWO SEPARATE CODE BLOCKS
-❌ FORBIDDEN: Combining JSON and Mermaid in same block
-
-CORRECT FORMAT:
-\`\`\`json
-{"turn-ABCD": "Topic"}
-\`\`\`
-
-\`\`\`mermaid  
-gitGraph
-commit id: "Topic"
-\`\`\`
-
-WRONG FORMAT (DO NOT DO):
-\`\`\`json
-{"1": "Topic"} // Do NOT use message numbers
-\`\`\`mermaid
-gitGraph...
-\`\`\`
-
-- JSON block MUST have \`\`\`json header
-- Mermaid block MUST have \`\`\`mermaid header  
-- NEVER combine them into one code block
-- NO explanatory text between blocks
-- EVERY commit in Mermaid MUST have an id: "description"
-- NO empty commits like just "commit" without id
-- Use "(cont.)" or "(part 2)" for multiple messages in same thread
-
 === CHAT HISTORY TO ANALYZE ===
 
 ${historyForPrompt}
 
-=== END OF INSTRUCTIONS ===
-  </div>
-</details>
-
-**Quick Summary:** Analyze the above chat history and provide JSON thread mapping + Mermaid visualization in TWO separate code blocks.
-
-Generate the TWO SEPARATE code blocks now (JSON first, then Mermaid):`;
+=== END OF INSTRUCTIONS ===`;
   
   updateProgressOverlay("Preparing analysis prompt...", 80);
   insertPrompt(dualPurposePrompt);
