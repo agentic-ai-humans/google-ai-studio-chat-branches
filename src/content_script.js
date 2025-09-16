@@ -1254,7 +1254,23 @@ function extractJsonAndMermaidFromDom(turnRoot) {
     
     panels.forEach((panel, index) => {
       const titleEl = panel.querySelector('.mat-expansion-panel-header .mat-expansion-panel-header-title');
-      const title = titleEl ? titleEl.textContent.trim() : '';
+      // Get the text content, but exclude the icon text (like "code")
+      let title = '';
+      if (titleEl) {
+        const spans = titleEl.querySelectorAll('span');
+        for (const span of spans) {
+          const text = span.textContent.trim();
+          // Skip icon text (usually single words like "code")
+          if (text && text.length > 1 && !text.includes('code')) {
+            title = text;
+            break;
+          }
+        }
+        // Fallback to full text content if no specific span found
+        if (!title) {
+          title = titleEl.textContent.trim();
+        }
+      }
       const codeEl = panel.querySelector('pre code');
       if (!codeEl) {
         console.log(`CS: Panel ${index + 1} has no code element`);
@@ -1262,6 +1278,8 @@ function extractJsonAndMermaidFromDom(turnRoot) {
       }
       let code = codeEl.textContent || '';
       console.log(`CS: Panel ${index + 1} title: "${title}", code length: ${code.length}`);
+      console.log(`CS: Panel ${index + 1} title elements:`, titleEl ? titleEl.innerHTML : 'none');
+      console.log(`CS: Panel ${index + 1} code preview:`, code.substring(0, 100) + '...');
       
       // Strip helper markers and zero-width spaces/highlights
       code = code.replace(/IGNORE_WHEN_COPYING_START[\s\S]*?IGNORE_WHEN_COPYING_END/g, '');
