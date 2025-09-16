@@ -1049,10 +1049,11 @@ async function analyzeAndPrepare() {
           richContent: placeholderText,
           textContent: placeholderText,
           attachments: message.attachments || [], // Keep attachments if any
-          isAnalysisPrompt: true // Mark as analysis prompt
+          isAnalysisPrompt: true, // Mark as analysis prompt
+          turnId: message.turnId || null
         });
         
-        historyForPrompt += `MESSAGE ${index + 1} (${message.role}):\n${placeholderText}\n\n---\n\n`;
+        historyForPrompt += `MESSAGE ${index + 1} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${placeholderText}\n\n---\n\n`;
       } else {
         // Regular message - include normally
         chatHistoryForStorage.push({ 
@@ -1060,7 +1061,8 @@ async function analyzeAndPrepare() {
           role: message.role, 
           richContent: message.richContent,
           textContent: message.textContent,
-          attachments: message.attachments || []
+          attachments: message.attachments || [],
+          turnId: message.turnId || null
         });
         
         // Use rich content (markdown) for the prompt, which preserves formatting
@@ -1072,7 +1074,7 @@ async function analyzeAndPrepare() {
           messageText = attachmentInfo + (messageText ? '\n\n' + messageText : '');
         }
         
-        historyForPrompt += `MESSAGE ${index + 1} (${message.role}):\n${messageText}\n\n---\n\n`;
+        historyForPrompt += `MESSAGE ${index + 1} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${messageText}\n\n---\n\n`;
       }
   });
   
@@ -1101,28 +1103,27 @@ async function analyzeAndPrepare() {
 
 === ANALYSIS INSTRUCTIONS ===
 
-You are a highly skilled conversation analysis AI. Your task is to analyze the provided chat history and create two outputs:
+You are a highly skilled conversation analysis AI. Your task is to analyze the provided chat history and create two outputs. Each message line includes a stable turn identifier in square brackets like [id: turn-XXXX]. Use it exactly as provided.
 
-1. First, provide a JSON object mapping each message number to its main conversation thread/topic.
-2. Second, provide a Mermaid gitGraph visualizing these threads.
+1. First, provide a JSON object that maps each message's TURN ID to its main conversation branch/topic. The keys MUST be the exact turnIds (e.g., "turn-ABCD1234"), NOT message numbers.
+2. Second, provide a Mermaid gitGraph visualizing these branches.
 
-FIRST CODE BLOCK - JSON:
+FIRST CODE BLOCK - JSON (keys are turnIds):
 \`\`\`json
 {
-  "1": "Thread Name",
-  "2": "Another Thread",
-  ...
+  "turn-ABCD1234": "Branch Name",
+  "turn-EFGH5678": "Another Branch"
 }
 \`\`\`
 
 SECOND CODE BLOCK - MERMAID:
 \`\`\`mermaid
 gitGraph
-   commit id: "Thread 1"
-   commit id: "Thread 1 (cont.)"
-   branch "Thread 2"
-   commit id: "Thread 2"
-   commit id: "Thread 2 (cont.)"
+   commit id: "Branch 1"
+   commit id: "Branch 1 (cont.)"
+   branch "Branch 2"
+   commit id: "Branch 2"
+   commit id: "Branch 2 (cont.)"
    ...
 \`\`\`
 
@@ -1134,7 +1135,7 @@ NO EXCEPTIONS - EVEN FOR VERY LONG CONVERSATIONS:
 
 CORRECT FORMAT:
 \`\`\`json
-{"1": "Topic"}
+{"turn-ABCD": "Topic"}
 \`\`\`
 
 \`\`\`mermaid  
@@ -1144,7 +1145,7 @@ commit id: "Topic"
 
 WRONG FORMAT (DO NOT DO):
 \`\`\`json
-{"1": "Topic"}
+{"1": "Topic"} // Do NOT use message numbers
 \`\`\`mermaid
 gitGraph...
 \`\`\`
@@ -1207,19 +1208,39 @@ function watchForAnalysisResponse(scrapedHistory) {
         try {
           const threadMap = JSON.parse(jsonString);
           
-          // Enhance thread map with turn IDs from scraped history
+          // Enhance thread map with turn IDs from scraped history or direct turnId keys
           console.log("CS: Enhancing thread map with turn IDs...");
           const enhancedThreadMap = {};
-          for (const [messageNum, threadName] of Object.entries(threadMap)) {
-            const messageIndex = parseInt(messageNum) - 1; // Convert to 0-based index
-            const turnId = (scrapedHistory[messageIndex] && scrapedHistory[messageIndex].turnId) || null;
-            
-            enhancedThreadMap[messageNum] = {
-              thread: threadName,
-              turnId: turnId
-            };
-            
-            console.log(`CS: Message ${messageNum}: "${threadName}" -> turnId: ${turnId}`);
+          for (const [key, threadName] of Object.entries(threadMap)) {
+            let messageNum = null;
+            let turnId = null;
+
+            const isTurnIdKey = typeof key === 'string' && key.startsWith('turn-');
+            if (isTurnIdKey) {
+              // Key is a turnId; find its message index in scraped history
+              turnId = key;
+              const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
+              if (idx !== -1) {
+                messageNum = idx + 1;
+              }
+            } else {
+              // Key is a message number (string or number)
+              const messageIndex = parseInt(key, 10) - 1;
+              if (!Number.isNaN(messageIndex) && messageIndex >= 0 && messageIndex < scrapedHistory.length) {
+                messageNum = messageIndex + 1;
+                turnId = (scrapedHistory[messageIndex] && scrapedHistory[messageIndex].turnId) || null;
+              }
+            }
+
+            if (messageNum !== null) {
+              enhancedThreadMap[messageNum] = {
+                thread: threadName,
+                turnId: turnId
+              };
+              console.log(`CS: Mapping message ${messageNum}: thread="${threadName}", turnId="${turnId}" (from key: ${key})`);
+            } else {
+              console.warn(`CS: Skipping entry with key "${key}" - could not resolve to message number`);
+            }
           }
           
           // Use current chat ID and save the enhanced thread map
