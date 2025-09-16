@@ -810,47 +810,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   showGraphButton.addEventListener('click', () => {
-    if (extractedMermaidData) {
-      try {
-        // Method 1: Try the standard base64 encoding approach for mermaid.live
-        console.log('Opening mermaid.live with pre-loaded diagram...');
-        
-        // Clean the mermaid data (remove extra whitespace and ensure proper format)
-        const cleanMermaidData = extractedMermaidData.trim();
-        
-        // Create a simple JSON object with the diagram
-        const diagramConfig = {
-          code: cleanMermaidData,
-          mermaid: "{}",
-          autoSync: true,
-          updateDiagram: true
-        };
-        
-        // Convert to base64
-        const base64Config = btoa(JSON.stringify(diagramConfig));
-        const mermaidLiveUrl = `https://mermaid.live/edit#base64:${base64Config}`;
-        
-        console.log('Attempting to open with config:', diagramConfig);
-        chrome.tabs.create({ url: mermaidLiveUrl });
-        
-      } catch (error) {
-        console.warn('Failed to open with config, trying simple base64 approach');
-        try {
-          // Method 2: Simple base64 encoding of just the diagram code
-          const simpleBase64 = btoa(extractedMermaidData.trim());
-          const fallbackUrl = `https://mermaid.live/edit#base64:${simpleBase64}`;
-          chrome.tabs.create({ url: fallbackUrl });
-          
-        } catch (fallbackError) {
-          console.warn('All encoding methods failed, opening mermaid.live with clipboard copy');
-          // Method 3: Open mermaid.live and copy to clipboard as fallback
-          chrome.tabs.create({ url: 'https://mermaid.live/edit' });
-          copyToClipboard(extractedMermaidData, 'mermaid');
-          console.log('Opened Mermaid Live editor and copied diagram to clipboard - please paste manually');
-        }
-      }
-    } else {
+    if (!extractedMermaidData) {
       console.log('No Mermaid diagram available to show');
+      return;
+    }
+    try {
+      // Always send plain Mermaid code (no JSON config) to mermaid.live
+      const simpleBase64 = btoa(extractedMermaidData.trim());
+      const url = `https://mermaid.live/edit#base64:${simpleBase64}`;
+      chrome.tabs.create({ url });
+    } catch (err) {
+      console.warn('Failed to open mermaid.live with base64 code. Falling back to clipboard.');
+      chrome.tabs.create({ url: 'https://mermaid.live/edit' });
+      copyToClipboard(extractedMermaidData, 'mermaid');
     }
   });
 
