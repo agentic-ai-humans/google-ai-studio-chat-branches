@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Chat Threads</title>
+  <title>Chat Branches</title>
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; width: 300px; padding: 15px; background-color: #2c3e50; color: #ecf0f1; margin: 0; text-align: center; }
     h3 { margin-top: 0; margin-bottom: 20px; color: #3498db; font-weight: 300; }
@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <h3 id="mainTitle">Google AI Studio Chat Threads</h3>
+  <h3 id="mainTitle">Google AI Studio Chat Branches</h3>
 
   <!-- === Main functionality - hidden when on invalid pages === -->
   <div id="mainView">
@@ -48,9 +48,9 @@
     <!-- === Section 3: Appears After Loading Analysis === -->
     <div id="filteringView" class="hidden" style="margin-top: 20px; border-top: 1px solid #34495e; padding-top: 20px;">
       <h4>Select branch:</h4>
-      <select id="threadSelector"></select>
+      <select id="branchSelector"></select>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
-        <button id="openThreadButton" class="action-button">Copy branch to clipboard</button>
+        <button id="openBranchButton" class="action-button">Copy branch to clipboard</button>
         <button id="goToBranchButton" class="action-button" style="background-color: #16a085;">Go to branch</button>
       </div>
       

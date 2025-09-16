@@ -1,6 +1,6 @@
 
 // content_script.js
-console.log("CS: Google AI Studio Chat Threads - Content script loaded.");
+console.log("CS: Google AI Studio Chat Branches - Content script loaded.");
 
 let pageConfig = { turnSelector: null };
 
@@ -160,7 +160,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       
       chrome.storage.local.get([
-        `thread_map_${currentChatId}`, 
+        `branch_map_${currentChatId}`, 
         `analysis_completed_${currentChatId}`, 
         `data_created_${currentChatId}`
       ], (data) => {
@@ -188,21 +188,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       loadAnalysis(true); // true = show alerts (for manual user action)
       sendResponse({ status: 'ok' });
       break;
-    case 'openThreadInNewChat':
-      console.log("CS: Opening thread:", request.threadName);
-      if (request.threadName) {
-        openFilteredThread(request.threadName);
+    case 'openBranchInNewChat':
+      console.log("CS: Opening branch:", request.branchName);
+      if (request.branchName) {
+        openFilteredBranch(request.branchName);
       } else {
-        console.error("CS: No threadName provided for openThreadInNewChat");
+        console.error("CS: No branchName provided for openBranchInNewChat");
       }
       sendResponse({ status: 'ok' });
       break;
     case 'goToBranch':
-      console.log("CS: Going to branch:", request.threadName);
-      if (request.threadName) {
-        goToBranch(request.threadName);
+      console.log("CS: Going to branch:", request.branchName);
+      if (request.branchName) {
+        goToBranch(request.branchName);
       } else {
-        console.error("CS: No threadName provided for goToBranch");
+        console.error("CS: No branchName provided for goToBranch");
       }
       sendResponse({ status: 'ok' });
       break;
@@ -1182,7 +1182,7 @@ function watchForAnalysisResponse(scrapedHistory) {
           const gitGraphData = JSON.parse(jsonString);
           if (gitGraphData.type === "gitGraph" && Array.isArray(gitGraphData.actions)) {
             // Parse structured gitGraph JSON
-            const enhancedThreadMap = {};
+            const enhancedBranchMap = {};
             for (const action of gitGraphData.actions) {
               if (action.type === "commit" && action.id && action.branch_hint) {
                 const turnId = action.id;
@@ -1191,7 +1191,7 @@ function watchForAnalysisResponse(scrapedHistory) {
                 const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
                 if (idx !== -1) {
                   const messageNum = idx + 1;
-                  enhancedThreadMap[messageNum] = { thread: branchName, turnId };
+                  enhancedBranchMap[messageNum] = { thread: branchName, turnId };
                 }
               }
             }
@@ -1206,7 +1206,7 @@ function watchForAnalysisResponse(scrapedHistory) {
               }
 
               const storageData = {
-                [`thread_map_${chatId}`]: enhancedThreadMap,
+                [`branch_map_${chatId}`]: enhancedBranchMap,
                 [`analysis_completed_${chatId}`]: true,
                 current_chat_id: chatId
               };
@@ -1239,7 +1239,7 @@ function watchForAnalysisResponse(scrapedHistory) {
       if (mermaidString) {
         try {
           // Parse turnId and branch from commit messages: "turn-XXXX | Branch: Name"
-          const enhancedThreadMap = {};
+          const enhancedBranchMap = {};
           const lines = mermaidString.split(/\r?\n/);
           for (const line of lines) {
             const commitMatch = line.match(/commit\s+message:\s*"([^"]+)"/);
@@ -1255,14 +1255,14 @@ function watchForAnalysisResponse(scrapedHistory) {
             const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
             if (idx !== -1) {
               const messageNum = idx + 1;
-              enhancedThreadMap[messageNum] = { thread: branchName, turnId };
+              enhancedBranchMap[messageNum] = { thread: branchName, turnId };
             }
           }
 
           const chatId = getCurrentChatId();
           if (chatId) {
             const storageData = {
-              [`thread_map_${chatId}`]: enhancedThreadMap,
+              [`branch_map_${chatId}`]: enhancedBranchMap,
               [`mermaid_diagram_${chatId}`]: mermaidString,
               [`analysis_completed_${chatId}`]: true,
               current_chat_id: chatId
@@ -1285,9 +1285,9 @@ function watchForAnalysisResponse(scrapedHistory) {
       const jsonObjectMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonObjectMatch) {
         try {
-          const threadMap = JSON.parse(jsonObjectMatch[0]);
-          const enhancedThreadMap = {};
-          for (const [key, threadName] of Object.entries(threadMap)) {
+          const branchMap = JSON.parse(jsonObjectMatch[0]);
+          const enhancedBranchMap = {};
+          for (const [key, branchName] of Object.entries(branchMap)) {
             let messageNum = null;
             let turnId = null;
             const isTurnIdKey = typeof key === 'string' && key.startsWith('turn-');
@@ -1303,13 +1303,13 @@ function watchForAnalysisResponse(scrapedHistory) {
               }
             }
             if (messageNum !== null) {
-              enhancedThreadMap[messageNum] = { thread: threadName, turnId };
+              enhancedBranchMap[messageNum] = { thread: branchName, turnId };
             }
           }
           const chatId = getCurrentChatId();
           if (chatId) {
             chrome.storage.local.set({
-              [`thread_map_${chatId}`]: enhancedThreadMap,
+              [`branch_map_${chatId}`]: enhancedBranchMap,
               [`analysis_completed_${chatId}`]: true,
               current_chat_id: chatId
             });
@@ -1590,11 +1590,11 @@ async function loadAnalysis(showAlerts = true) {
   try {
     console.log("CS: ===== JSON PARSING START =====");
     console.log("CS: Attempting to parse JSON string:", jsonString.substring(0, 300) + "...");
-    const threadMap = JSON.parse(jsonString);
+    const branchMap = JSON.parse(jsonString);
     console.log("CS: SUCCESS - JSON parsed successfully");
-    console.log("CS: Thread map object:", threadMap);
-    console.log("CS: Thread map keys:", Object.keys(threadMap));
-    console.log("CS: Thread map values:", Object.values(threadMap));
+    console.log("CS: Thread map object:", branchMap);
+    console.log("CS: Thread map keys:", Object.keys(branchMap));
+    console.log("CS: Thread map values:", Object.values(branchMap));
     
     // Use current chat ID and save the thread map (already processed during analysis)
     const chatId = getCurrentChatId();
@@ -1603,7 +1603,7 @@ async function loadAnalysis(showAlerts = true) {
     if (chatId) {
       console.log("CS: Saving thread map and visualization data to storage...");
       const storageData = { 
-        [`thread_map_${chatId}`]: threadMap,
+        [`branch_map_${chatId}`]: branchMap,
         [`analysis_completed_${chatId}`]: true,
         current_chat_id: chatId // Update current chat ID
       };
@@ -1632,9 +1632,9 @@ async function loadAnalysis(showAlerts = true) {
     }
     
     // Get unique thread names for the dropdown
-    const threadNames = [...new Set(Object.values(threadMap))];
-    console.log("CS: Unique thread names extracted:", threadNames);
-    console.log("CS: Number of unique threads:", threadNames.length);
+    const branchNames = [...new Set(Object.values(branchMap))];
+    console.log("CS: Unique thread names extracted:", branchNames);
+    console.log("CS: Number of unique threads:", branchNames.length);
     
     // Get the timestamp for this chat and send to popup
     console.log("CS: Getting timestamp for popup...");
@@ -1643,7 +1643,7 @@ async function loadAnalysis(showAlerts = true) {
       // Send message to popup to update the dropdown
       chrome.runtime.sendMessage({ 
         action: 'updateThreadDropdown', 
-        threadNames: threadNames,
+        branchNames: branchNames,
         timestamp: timestampData[`data_created_${chatId}`]
       }, (response) => {
         if (chrome.runtime.lastError) {
@@ -1655,7 +1655,7 @@ async function loadAnalysis(showAlerts = true) {
     });
     
     console.log("CS: ===== LOAD ANALYSIS SUCCESS =====");
-    console.log(`Analysis loaded successfully! Found ${threadNames.length} threads: ${threadNames.join(', ')}`);
+    console.log(`Analysis loaded successfully! Found ${branchNames.length} threads: ${branchNames.join(', ')}`);
     
   } catch (error) {
     console.error("CS: ERROR - Failed to parse JSON from AI response:", error);
@@ -1664,9 +1664,9 @@ async function loadAnalysis(showAlerts = true) {
   }
 }
 
-async function openFilteredThread(threadName) {
+async function openFilteredBranch(branchName) {
   console.log("CS: ===== OPEN FILTERED THREAD START =====");
-  console.log("CS: Thread name:", threadName);
+  console.log("CS: Thread name:", branchName);
   
   // Use current chat ID for this page
   const chatId = getCurrentChatId();
@@ -1679,26 +1679,26 @@ async function openFilteredThread(threadName) {
   }
   
   console.log("CS: Getting data from storage...");
-  const data = await chrome.storage.local.get([`chat_history_${chatId}`, `thread_map_${chatId}`]);
+  const data = await chrome.storage.local.get([`chat_history_${chatId}`, `branch_map_${chatId}`]);
   console.log("CS: Chat history length:", data[`chat_history_${chatId}`] ? data[`chat_history_${chatId}`].length : 0);
-  console.log("CS: Thread map exists:", !!data[`thread_map_${chatId}`]);
+  console.log("CS: Thread map exists:", !!data[`branch_map_${chatId}`]);
   
-  if (!data[`chat_history_${chatId}`] || !data[`thread_map_${chatId}`]) {
+  if (!data[`chat_history_${chatId}`] || !data[`branch_map_${chatId}`]) {
     console.log("CS: ERROR - Missing data");
     console.error("CS: No analysis data found for this chat");
     return;
   }
   
-  const threadMap = data[`thread_map_${chatId}`];
-  console.log("CS: Thread map:", threadMap);
-  console.log("CS: Looking for thread name:", threadName);
+  const branchMap = data[`branch_map_${chatId}`];
+  console.log("CS: Thread map:", branchMap);
+  console.log("CS: Looking for thread name:", branchName);
   
   // Find all messages that belong to this thread
   const chatHistory = data[`chat_history_${chatId}`];
   const threadMessages = chatHistory.filter(message => {
-    const messageThread = threadMap[String(message.id)];
-    console.log(`CS: Message ${message.id} -> thread "${messageThread}" (looking for "${threadName}")`);
-    return messageThread === threadName;
+    const messageThread = branchMap[String(message.id)];
+    console.log(`CS: Message ${message.id} -> thread "${messageThread}" (looking for "${branchName}")`);
+    return messageThread === branchName;
   });
   
   console.log("CS: Found thread messages:", threadMessages.length);
@@ -1729,14 +1729,14 @@ async function openFilteredThread(threadName) {
   
   if (contextMessages.length === 0) {
     console.log("CS: ERROR - No context messages found");
-    console.error(`CS: No messages found for thread "${threadName}"`);
+    console.error(`CS: No messages found for thread "${branchName}"`);
     return;
   }
 
   // Create thread hierarchy information
   const mainBranchCount = branchPoint ? contextMessages.filter(m => m.id < branchPoint).length : 0;
   const threadInfo = {
-    threadName: threadName,
+    branchName: branchName,
     totalMessages: contextMessages.length,
     mainBranchMessages: mainBranchCount,
     threadSpecificMessages: threadMessages.length,
@@ -1744,9 +1744,9 @@ async function openFilteredThread(threadName) {
     originalChatLength: chatHistory.length
   };
 
-  let filteredContent = `# Thread: ${threadName}\n\n`;
+  let filteredContent = `# Thread: ${branchName}\n\n`;
   filteredContent += `**Thread Context Information:**\n`;
-  filteredContent += `- Selected Thread: ${threadInfo.threadName}\n`;
+  filteredContent += `- Selected Thread: ${threadInfo.branchName}\n`;
   filteredContent += `- Total messages in context: ${threadInfo.totalMessages}\n`;
   filteredContent += `- Main branch context: ${threadInfo.mainBranchMessages} messages\n`;
   filteredContent += `- Thread-specific messages: ${threadInfo.threadSpecificMessages} messages\n`;
@@ -1756,7 +1756,7 @@ async function openFilteredThread(threadName) {
 
   // Add all context messages (main branch + selected thread)
   for (const message of contextMessages) {
-    const messageType = branchPoint && message.id < branchPoint ? "Main Branch" : threadName;
+    const messageType = branchPoint && message.id < branchPoint ? "Main Branch" : branchName;
     
     // Use richContent (now markdown) for better formatting, fallback to textContent
     let cleanContent = message.richContent || message.textContent;
@@ -1808,7 +1808,7 @@ async function openFilteredThread(threadName) {
     attachmentNotice = `\n\n⚠️ **IMPORTANT - ATTACHMENTS REQUIRED:**\nThis conversation references ${uniqueAttachments.length} file(s) that were attached in the original chat. To continue this conversation properly, please upload the following files from your Google AI Studio folder:\n\n${attachmentList}\n\n**Finding your files:** Look in your Google AI Studio file manager for files with these exact names and upload times. If you have multiple files with the same name, use the upload timestamp to identify the correct ones. Original thread extracted on ${currentDate}.\n\n`;
   }
 
-  const finalContentForNewChat = `Please continue the conversation based on the following context, which is a complete thread from a previous chat including its main branch context. This contains ${threadInfo.totalMessages} messages total (${threadInfo.mainBranchMessages} from main branch context + ${threadInfo.threadSpecificMessages} from the selected "${threadName}" thread). The conversation branches at message ${threadInfo.branchPoint || 'N/A'}. Preserve the code formatting and structure:${attachmentNotice}\n\n${filteredContent}`;
+  const finalContentForNewChat = `Please continue the conversation based on the following context, which is a complete thread from a previous chat including its main branch context. This contains ${threadInfo.totalMessages} messages total (${threadInfo.mainBranchMessages} from main branch context + ${threadInfo.threadSpecificMessages} from the selected "${branchName}" thread). The conversation branches at message ${threadInfo.branchPoint || 'N/A'}. Preserve the code formatting and structure:${attachmentNotice}\n\n${filteredContent}`;
   
   console.log("CS: Prepared content for clipboard (length):", finalContentForNewChat.length);
   console.log("CS: Content preview:", finalContentForNewChat.substring(0, 200) + "...");
@@ -1823,28 +1823,28 @@ async function openFilteredThread(threadName) {
   }
   
   // Use fallback method for content scripts
-  copyToClipboardContentScript(finalContentForNewChat, threadName, threadInfo);
+  copyToClipboardContentScript(finalContentForNewChat, branchName, threadInfo);
   
   console.log("CS: ===== OPEN FILTERED THREAD END =====");
 }
 
-function copyToClipboardContentScript(text, threadName, threadInfo) {
+function copyToClipboardContentScript(text, branchName, threadInfo) {
   // Try modern clipboard API first (with focus attempt)
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => {
       console.log("CS: Successfully copied to clipboard!");
-      console.log(`Thread "${threadName}" copied to clipboard - ${threadInfo.totalMessages} messages total`);
+      console.log(`Thread "${branchName}" copied to clipboard - ${threadInfo.totalMessages} messages total`);
     }).catch(err => {
       console.error('CS: Clipboard API failed:', err);
-      fallbackCopyContentScript(text, threadName, threadInfo);
+      fallbackCopyContentScript(text, branchName, threadInfo);
     });
   } else {
     // Fallback for browsers without clipboard API
-    fallbackCopyContentScript(text, threadName, threadInfo);
+    fallbackCopyContentScript(text, branchName, threadInfo);
   }
 }
 
-function fallbackCopyContentScript(text, threadName, threadInfo) {
+function fallbackCopyContentScript(text, branchName, threadInfo) {
   try {
     // Create a temporary textarea element
     const textArea = document.createElement('textarea');
@@ -1863,18 +1863,18 @@ function fallbackCopyContentScript(text, threadName, threadInfo) {
     
     if (successful) {
       console.log("CS: Successfully copied using fallback method!");
-      console.log(`Thread "${threadName}" copied to clipboard - ${threadInfo.totalMessages} messages total`);
+      console.log(`Thread "${branchName}" copied to clipboard - ${threadInfo.totalMessages} messages total`);
     } else {
       throw new Error('execCommand copy failed');
     }
   } catch (err) {
     console.error('CS: Fallback copy failed:', err);
     // Show manual copy dialog as last resort
-    showManualCopyDialogContentScript(text, threadName, threadInfo);
+    showManualCopyDialogContentScript(text, branchName, threadInfo);
   }
 }
 
-function showManualCopyDialogContentScript(text, threadName, threadInfo) {
+function showManualCopyDialogContentScript(text, branchName, threadInfo) {
   // Create a modal with selectable text for manual copy
   const modal = document.createElement('div');
   modal.style.cssText = `
@@ -1901,7 +1901,7 @@ function showManualCopyDialogContentScript(text, threadName, threadInfo) {
       overflow: auto;
     ">
       <h3>Manual Copy Required</h3>
-      <p><strong>Thread:</strong> "${threadName}" (${threadInfo.totalMessages} messages)</p>
+      <p><strong>Thread:</strong> "${branchName}" (${threadInfo.totalMessages} messages)</p>
       <p>Please select all text below and copy manually (Ctrl+C / Cmd+C):</p>
       <textarea readonly style="
         width: 100%;
@@ -1934,9 +1934,9 @@ function showManualCopyDialogContentScript(text, threadName, threadInfo) {
   console.log("CS: Manual copy dialog shown");
 }
 
-async function goToBranch(threadName) {
+async function goToBranch(branchName) {
   console.log("CS: ===== GO TO BRANCH START =====");
-  console.log("CS: Branch name:", threadName);
+  console.log("CS: Branch name:", branchName);
   
   // Use current chat ID for this page
   const chatId = getCurrentChatId();
@@ -1948,23 +1948,23 @@ async function goToBranch(threadName) {
   }
   
   console.log("CS: Getting data from storage...");
-  const data = await chrome.storage.local.get([`chat_history_${chatId}`, `thread_map_${chatId}`]);
+  const data = await chrome.storage.local.get([`chat_history_${chatId}`, `branch_map_${chatId}`]);
   
-  if (!data[`chat_history_${chatId}`] || !data[`thread_map_${chatId}`]) {
+  if (!data[`chat_history_${chatId}`] || !data[`branch_map_${chatId}`]) {
     console.log("CS: ERROR - No analysis data found for this chat");
     return;
   }
   
-  const threadMap = data[`thread_map_${chatId}`];
+  const branchMap = data[`branch_map_${chatId}`];
   const chatHistory = data[`chat_history_${chatId}`];
   
   console.log("CS: === STORAGE DATA DEBUG ===");
-  console.log("CS: Thread Map:", threadMap);
+  console.log("CS: Thread Map:", branchMap);
   console.log("CS: Chat History length:", chatHistory.length);
   console.log("CS: First 3 chat history entries:", chatHistory.slice(0, 3));
   console.log("CS: Last 3 chat history entries:", chatHistory.slice(-3));
   
-  console.log("CS: Looking for branch name:", threadName);
+  console.log("CS: Looking for branch name:", branchName);
   
   // Find the last message in this branch
   let lastMessageInThread = null;
@@ -1973,12 +1973,12 @@ async function goToBranch(threadName) {
   
   console.log("CS: === SEARCHING FOR BRANCH ===");
   // Iterate over existing keys only, sorted descending numerically, to avoid undefined gaps
-  const sortedMessageNums = Object.keys(threadMap)
+  const sortedMessageNums = Object.keys(branchMap)
     .map(k => parseInt(k, 10))
     .filter(n => !Number.isNaN(n))
     .sort((a, b) => b - a);
   for (const messageNum of sortedMessageNums) {
-    const threadData = threadMap[messageNum];
+    const threadData = branchMap[messageNum];
     if (threadData === undefined || threadData === null) {
       console.warn(`CS: Skipping message ${messageNum} - no thread data`);
       continue;
@@ -1991,7 +1991,7 @@ async function goToBranch(threadName) {
     
     console.log(`CS: Message ${messageNum}: Thread="${threadForMessage}", StoredTurnId="${storedTurnId}"`);
     
-    if (threadForMessage === threadName) {
+    if (threadForMessage === branchName) {
       // Get the corresponding message from chat history
       lastMessageInThread = chatHistory[messageNum - 1]; // Convert to 0-based index
       lastTurnId = storedTurnId || (lastMessageInThread && lastMessageInThread.turnId); // Use stored turn ID or fallback
@@ -1999,7 +1999,7 @@ async function goToBranch(threadName) {
       
       // Show first few words of the message content for verification
       const messagePreview = (lastMessageInThread.textContent || lastMessageInThread.richContent || 'No content').substring(0, 100);
-      console.log(`CS: ✅ FOUND last message in branch "${threadName}" at message ${messageNum}`);
+      console.log(`CS: ✅ FOUND last message in branch "${branchName}" at message ${messageNum}`);
       console.log(`CS: 🎯 Using stored turnId: ${storedTurnId || 'Not stored, using fallback'}`);
       console.log(`CS: 📝 Message content preview: "${messagePreview}..."`);
       break;
@@ -2007,8 +2007,8 @@ async function goToBranch(threadName) {
   }
   
   if (!lastMessageInThread) {
-    console.log("CS: ❌ ERROR - No message found for branch:", threadName);
-    console.log("CS: Available branches in thread map:", Object.values(threadMap));
+    console.log("CS: ❌ ERROR - No message found for branch:", branchName);
+    console.log("CS: Available branches in thread map:", Object.values(branchMap));
     return;
   }
   
@@ -2040,7 +2040,7 @@ async function goToBranch(threadName) {
   }
   
   if (!lastTurnId) {
-    console.log("CS: ❌ ERROR - Could not find turn ID for branch:", threadName);
+    console.log("CS: ❌ ERROR - Could not find turn ID for branch:", branchName);
     console.log("CS: SUGGESTION - Please re-run the analysis to generate turn IDs for branch navigation");
     return;
   }

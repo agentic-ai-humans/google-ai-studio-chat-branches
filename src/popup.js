@@ -18,8 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const scrollToBottomButton = document.getElementById('scrollToBottomButton');
   const analyzeButton = document.getElementById('analyzeButton');
   // loadAnalysisButton removed - analysis now loads automatically
-  const threadSelector = document.getElementById('threadSelector');
-  const openThreadButton = document.getElementById('openThreadButton');
+  const branchSelector = document.getElementById('branchSelector');
+  const openBranchButton = document.getElementById('openBranchButton');
   const goToBranchButton = document.getElementById('goToBranchButton');
   const clearDataButton = document.getElementById('clearDataButton');
   const dataTimestamp = document.getElementById('dataTimestamp');
@@ -49,8 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
     analyzeButton: !!analyzeButton,
     // loadAnalysisButton removed - auto-loading enabled
     goToBranchButton: !!goToBranchButton,
-    threadSelector: !!threadSelector,
-    openThreadButton: !!openThreadButton,
+    branchSelector: !!branchSelector,
+    openBranchButton: !!openBranchButton,
     clearDataButton: !!clearDataButton,
     dataTimestamp: !!dataTimestamp,
     mermaidSection: !!mermaidSection,
@@ -386,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Check storage data first
       chrome.storage.local.get([
-        `thread_map_${chatId}`,
+        `branch_map_${chatId}`,
         `json_data_${chatId}`,
         `mermaid_diagram_${chatId}`,
         `data_created_${chatId}`,
@@ -394,14 +394,14 @@ document.addEventListener('DOMContentLoaded', () => {
       ], (storageData) => {
         console.log('AUTO-LOAD: Storage data keys found:', Object.keys(storageData));
         
-        const hasStoredThreadMap = !!storageData[`thread_map_${chatId}`];
+        const hasStoredBranchMap = !!storageData[`branch_map_${chatId}`];
         const hasStoredJsonData = !!storageData[`json_data_${chatId}`];
         const hasStoredMermaidData = !!storageData[`mermaid_diagram_${chatId}`];
         const hasStoredTimestamp = !!storageData[`data_created_${chatId}`];
         const dataWasCleared = !!storageData[`data_cleared_${chatId}`];
         
         console.log('AUTO-LOAD: Storage availability:', {
-          threadMap: hasStoredThreadMap,
+          branchMap: hasStoredBranchMap,
           jsonData: hasStoredJsonData,
           mermaidData: hasStoredMermaidData,
           timestamp: hasStoredTimestamp,
@@ -409,7 +409,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         // If we have storage data, use it
-        if (hasStoredThreadMap || hasStoredJsonData || hasStoredMermaidData) {
+        if (hasStoredBranchMap || hasStoredJsonData || hasStoredMermaidData) {
           console.log('AUTO-LOAD: Loading from storage');
           loadDataFromStorage(storageData, chatId);
         }
@@ -423,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
               console.log('AUTO-LOAD: Found fresh data on page, loading it');
               // Fresh page data available, load it (this will override storage data)
               loadAnalysisDataFromPage();
-            } else if (!hasStoredThreadMap && !hasStoredJsonData && !hasStoredMermaidData) {
+            } else if (!hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
               console.log('AUTO-LOAD: No data available anywhere');
               hideAllDataSections();
             } else {
@@ -432,7 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         } else {
           console.log('AUTO-LOAD: Skipping page check - data was recently cleared by user');
-          if (!hasStoredThreadMap && !hasStoredJsonData && !hasStoredMermaidData) {
+          if (!hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
             console.log('AUTO-LOAD: No stored data available');
             hideAllDataSections();
           }
@@ -441,16 +441,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadDataFromStorage(storageData, chatId) {
-      // Load thread selector if available
-      if (storageData[`thread_map_${chatId}`]) {
-        // Extract thread names, handling both old format (string) and new format (object)
-        const threadMapData = storageData[`thread_map_${chatId}`];
-        const threadNames = [...new Set(Object.values(threadMapData).map(item => 
+      // Load branch selector if available
+      if (storageData[`branch_map_${chatId}`]) {
+        // Extract branch names, handling both old format (string) and new format (object)
+        const branchMapData = storageData[`branch_map_${chatId}`];
+        const branchNames = [...new Set(Object.values(branchMapData).map(item => 
           typeof item === 'string' ? item : item.thread
         ))];
-        if (threadNames.length > 0) {
-          console.log('AUTO-LOAD: Loading thread selector with', threadNames.length, 'threads');
-          populateThreadSelector(threadNames);
+        if (branchNames.length > 0) {
+          console.log('AUTO-LOAD: Loading branch selector with', branchNames.length, 'branches');
+          populateBranchSelector(branchNames);
           filteringView.classList.remove('hidden');
           dataManagementSection.classList.remove('hidden');
         }
@@ -460,17 +460,17 @@ document.addEventListener('DOMContentLoaded', () => {
       extractedJsonData = storageData[`json_data_${chatId}`] || null;
       extractedMermaidData = storageData[`mermaid_diagram_${chatId}`] || null;
       
-      // If we have thread data, always show the visualization section
+      // If we have branch data, always show the visualization section
       // (even if no JSON/Mermaid data yet - user can generate it)
-      if (storageData[`thread_map_${chatId}`] || extractedJsonData || extractedMermaidData) {
+      if (storageData[`branch_map_${chatId}`] || extractedJsonData || extractedMermaidData) {
         console.log('AUTO-LOAD: Showing visualization section:', {
-          hasThreads: !!storageData[`thread_map_${chatId}`],
+          hasBranches: !!storageData[`branch_map_${chatId}`],
           hasJson: !!extractedJsonData,
           hasMermaid: !!extractedMermaidData
         });
         
         mermaidSection.classList.remove('hidden');
-        // dataManagementSection already shown above if we have thread data
+        // dataManagementSection already shown above if we have branch data
       }
       
       // Show timestamp
@@ -527,23 +527,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
-  function calculateBranchInfo(threadNames, threadMap, chatHistory) {
+  function calculateBranchInfo(branchNames, branchMap, chatHistory) {
     const branches = [];
-    const messageCount = Object.keys(threadMap).length;
+    const messageCount = Object.keys(branchMap).length;
     
-    // Determine main branch (most common thread name)
-    const threadCounts = {};
-    Object.values(threadMap).forEach(item => {
-      const thread = typeof item === 'string' ? item : item.thread;
-      threadCounts[thread] = (threadCounts[thread] || 0) + 1;
+    // Determine main branch (most common branch name)
+    const branchCounts = {};
+    Object.values(branchMap).forEach(item => {
+      const branch = typeof item === 'string' ? item : item.thread;
+      branchCounts[branch] = (branchCounts[branch] || 0) + 1;
     });
-    const mainBranch = Object.keys(threadCounts).reduce((a, b) => threadCounts[a] > threadCounts[b] ? a : b);
+    const mainBranch = Object.keys(branchCounts).reduce((a, b) => branchCounts[a] > branchCounts[b] ? a : b);
     
-    threadNames.forEach(threadName => {
-      const isMain = threadName === mainBranch;
-      const lastMessage = getLastMessageForBranch(threadName, threadMap, chatHistory);
-      const messagePositions = getMessagePositionsForBranch(threadName, threadMap);
-      const mainPositions = getMessagePositionsForBranch(mainBranch, threadMap);
+    branchNames.forEach(branchName => {
+      const isMain = branchName === mainBranch;
+      const lastMessage = getLastMessageForBranch(branchName, branchMap, chatHistory);
+      const messagePositions = getMessagePositionsForBranch(branchName, branchMap);
+      const mainPositions = getMessagePositionsForBranch(mainBranch, branchMap);
       
       // Calculate ahead/behind relative to main branch
       let aheadBehind = 0;
@@ -554,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       branches.push({
-        name: threadName,
+        name: branchName,
         isMain: isMain,
         lastMessage: lastMessage,
         messageCount: messagePositions.length,
@@ -566,23 +566,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return branches;
   }
 
-  function getLastMessageForBranch(threadName, threadMap, chatHistory) {
+  function getLastMessageForBranch(branchName, branchMap, chatHistory) {
     // Find the last message in this branch
     for (let i = chatHistory.length - 1; i >= 0; i--) {
       const messageNum = i + 1;
-      if (threadMap[messageNum] === threadName) {
+      if (branchMap[messageNum] === branchName) {
         return chatHistory[i];
       }
     }
     return null;
   }
 
-  function getMessagePositionsForBranch(threadName, threadMap) {
+  function getMessagePositionsForBranch(branchName, branchMap) {
     const positions = [];
-    Object.keys(threadMap).forEach(messageNum => {
-      const item = threadMap[messageNum];
-      const thread = typeof item === 'string' ? item : item.thread;
-      if (thread === threadName) {
+    Object.keys(branchMap).forEach(messageNum => {
+      const item = branchMap[messageNum];
+      const branch = typeof item === 'string' ? item : item.thread;
+      if (branch === branchName) {
         positions.push(parseInt(messageNum));
       }
     });
@@ -630,27 +630,27 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${prefix}${branch.name} / ${lastCommit}${suffix}`;
   }
 
-  function populateThreadSelector(threadNames) {
-    console.log('POPULATE THREAD SELECTOR called with:', threadNames);
-    threadSelector.innerHTML = ''; // Clear the list
+  function populateBranchSelector(branchNames) {
+    console.log('POPULATE BRANCH SELECTOR called with:', branchNames);
+    branchSelector.innerHTML = ''; // Clear the list
 
     // Add default option
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
     defaultOption.textContent = 'Select a branch...';
-    threadSelector.appendChild(defaultOption);
+    branchSelector.appendChild(defaultOption);
     
-    // Get chatId and thread map to calculate branch info
+    // Get chatId and branch map to calculate branch info
     sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
       if (response && response.chatId) {
-        chrome.storage.local.get([`thread_map_${response.chatId}`, `chat_history_${response.chatId}`, `selected_branch_${response.chatId}`], (result) => {
-          const threadMap = result[`thread_map_${response.chatId}`];
+        chrome.storage.local.get([`branch_map_${response.chatId}`, `chat_history_${response.chatId}`, `selected_branch_${response.chatId}`], (result) => {
+          const branchMap = result[`branch_map_${response.chatId}`];
           const chatHistory = result[`chat_history_${response.chatId}`];
           const savedBranch = result[`selected_branch_${response.chatId}`];
           
-          if (threadMap && chatHistory) {
-            console.log('USING GIT-STYLE SORTING with thread map and chat history');
-            const branchInfo = calculateBranchInfo(threadNames, threadMap, chatHistory);
+          if (branchMap && chatHistory) {
+            console.log('USING GIT-STYLE SORTING with branch map and chat history');
+            const branchInfo = calculateBranchInfo(branchNames, branchMap, chatHistory);
             
             // Sort branches by git-style priority (main first, then by activity)
             const sortedBranches = sortBranchesGitStyle(branchInfo);
@@ -661,25 +661,25 @@ document.addEventListener('DOMContentLoaded', () => {
               const option = document.createElement('option');
               option.value = branch.name;
               option.textContent = formatBranchOption(branch);
-              threadSelector.appendChild(option);
+              branchSelector.appendChild(option);
             });
             
             // Restore previously selected branch
-            if (savedBranch && threadNames.includes(savedBranch)) {
-              threadSelector.value = savedBranch;
+            if (savedBranch && branchNames.includes(savedBranch)) {
+              branchSelector.value = savedBranch;
               console.log('Restored selected branch:', savedBranch);
             }
           } else {
-            // Fallback to simple format if no thread map available
-            threadNames.forEach(threadName => {
-              const option = document.createElement('option');
-              option.value = threadName;
-              option.textContent = threadName;
-              threadSelector.appendChild(option);
+            // Fallback to simple format if no branch map available
+            branchNames.forEach(branchName => {
+      const option = document.createElement('option');
+              option.value = branchName;
+              option.textContent = branchName;
+              branchSelector.appendChild(option);
             });
             
-            if (savedBranch && threadNames.includes(savedBranch)) {
-              threadSelector.value = savedBranch;
+            if (savedBranch && branchNames.includes(savedBranch)) {
+              branchSelector.value = savedBranch;
               console.log('Restored selected branch:', savedBranch);
             }
           }
@@ -755,7 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear only the current chat's data before new analysis
         chrome.storage.local.remove([
           `chat_history_${response.chatId}`, 
-          `thread_map_${response.chatId}`, 
+          `branch_map_${response.chatId}`, 
           `analysis_completed_${response.chatId}`, 
           `data_created_${response.chatId}`,
           `json_data_${response.chatId}`,
@@ -870,22 +870,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load Analysis button event listener removed - now handled automatically by auto-loading
 
-  openThreadButton.addEventListener('click', () => {
-    const selectedThread = threadSelector.value;
-    if (selectedThread) {
-      sendMessageToContentScript({ action: 'openThreadInNewChat', threadName: selectedThread }, () => {
+  openBranchButton.addEventListener('click', () => {
+    const selectedBranch = branchSelector.value;
+    if (selectedBranch) {
+      sendMessageToContentScript({ action: 'openBranchInNewChat', branchName: selectedBranch }, () => {
         // Get current chat info and clear only that chat's data after use
         sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
           if (response && response.chatId) {
             chrome.storage.local.remove([
               `chat_history_${response.chatId}`, 
-              `thread_map_${response.chatId}`, 
+              `branch_map_${response.chatId}`, 
               `analysis_completed_${response.chatId}`, 
               `data_created_${response.chatId}`, 
               'current_chat_id'
             ]);
           }
-          // Close popup after successful thread opening with a small delay
+          // Close popup after successful branch opening with a small delay
           setTimeout(() => window.close(), 500);
         });
       });
@@ -893,12 +893,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   goToBranchButton.addEventListener('click', () => {
-    const selectedThread = threadSelector.value;
-    if (selectedThread) {
+    const selectedBranch = branchSelector.value;
+    if (selectedBranch) {
       console.log('=== GO TO BRANCH CLICKED ===');
-      console.log('Selected branch:', selectedThread);
+      console.log('Selected branch:', selectedBranch);
       console.log('Sending goToBranch message to content script...');
-      sendMessageToContentScript({ action: 'goToBranch', threadName: selectedThread }, (response) => {
+      sendMessageToContentScript({ action: 'goToBranch', branchName: selectedBranch }, (response) => {
         console.log('Branch navigation response:', response);
         // Close popup after successful navigation
         window.close();
@@ -918,7 +918,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm('Are you sure you want to clear all analysis data for this chat?')) {
           chrome.storage.local.remove([
             `chat_history_${response.chatId}`, 
-            `thread_map_${response.chatId}`, 
+            `branch_map_${response.chatId}`, 
             `analysis_completed_${response.chatId}`, 
             `data_created_${response.chatId}`,
             `json_data_${response.chatId}`,
@@ -954,8 +954,8 @@ document.addEventListener('DOMContentLoaded', () => {
   clearDataButton.addEventListener('click', clearAllData);
 
   // Save selected branch when it changes
-  threadSelector.addEventListener('change', () => {
-    const selectedBranch = threadSelector.value;
+  branchSelector.addEventListener('change', () => {
+    const selectedBranch = branchSelector.value;
     if (selectedBranch) {
       // Get chatId from content script first
       sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
@@ -970,9 +970,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Listen for messages from content script
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'updateThreadDropdown') {
-      // NOTE: Thread dropdown is now populated by loadDataFromStorage with proper sorting
-      // populateThreadSelector(request.threadNames); // REMOVED - this was overriding the sorted dropdown
+    if (request.action === 'updateBranchDropdown') {
+      // NOTE: Branch dropdown is now populated by loadDataFromStorage with proper sorting
+      // populateBranchSelector(request.branchNames); // REMOVED - this was overriding the sorted dropdown
       filteringView.classList.remove('hidden');
       dataManagementSection.classList.remove('hidden');
       
