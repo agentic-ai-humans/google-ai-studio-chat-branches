@@ -1167,6 +1167,60 @@ function watchForAnalysisResponse(scrapedHistory) {
   if (!lastModelTurn) return;
 
   const observer = new MutationObserver((mutations) => {
+      // DOM-first extraction from expansion panels (robust to highlighted/combined blocks)
+      const domExtract = extractJsonAndMermaidFromDom(lastModelTurn);
+      if (domExtract && (domExtract.json || domExtract.mermaid)) {
+        try {
+          const chatId = getCurrentChatId();
+          const storageData = { current_chat_id: chatId };
+          let enhancedBranchMap = {};
+
+          if (domExtract.json) {
+            storageData[`json_data_${chatId}`] = domExtract.json;
+            try {
+              const gitGraph = JSON.parse(domExtract.json);
+              if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
+                gitGraph.actions.forEach(action => {
+                  if (action && action.type === 'commit' && action.id) {
+                    const turnId = String(action.id);
+                    const branchName = String(action.branch_hint || action.branch || '').trim();
+                    if (!branchName) return;
+                    const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
+                    if (idx !== -1) {
+                      const messageNum = idx + 1;
+                      enhancedBranchMap[messageNum] = { thread: branchName, turnId };
+                    }
+                  }
+                });
+                storageData[`branch_map_${chatId}`] = enhancedBranchMap;
+              }
+            } catch (e) {
+              console.warn('CS: Failed to parse JSON from DOM extract', e);
+            }
+          }
+
+          if (domExtract.mermaid) {
+            storageData[`mermaid_diagram_${chatId}`] = domExtract.mermaid;
+          }
+
+          // Only save if we have any artifact
+          if (storageData[`json_data_${chatId}`] || storageData[`mermaid_diagram_${chatId}`]) {
+            storageData[`analysis_completed_${chatId}`] = true;
+            chrome.storage.local.set(storageData);
+            chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
+              console.log('CS: Cleared data_cleared flag for chat:', chatId);
+            });
+            // Notify popup and restore scroll position
+            safeSendToPopup({ action: 'analysisCompleted', chatId });
+            setTimeout(() => { try { scrollToBottomOfChat(); } catch (_) {} }, 300);
+            observer.disconnect();
+            return;
+          }
+        } catch (err) {
+          console.warn('CS: DOM-first extraction failed, falling back to text parsing', err);
+        }
+      }
+
       const contentNode = lastModelTurn.querySelector('ms-cmark-node');
       const responseText = contentNode ? contentNode.innerText.trim() : '';
 
@@ -1329,6 +1383,58 @@ function watchForAnalysisResponse(scrapedHistory) {
   // Send completion signal
   sendAnalysisComplete();
   console.log("CS: Analysis response received and processed");
+}
+
+// Extract JSON and Mermaid code text from AI Studio code panels (handles combined block)
+function extractJsonAndMermaidFromDom(turnRoot) {
+  try {
+    const result = { json: null, mermaid: null };
+    const panels = Array.from(turnRoot.querySelectorAll('ms-code-block .mat-expansion-panel'));
+    panels.forEach(panel => {
+      const titleEl = panel.querySelector('.mat-expansion-panel-header .mat-expansion-panel-header-title');
+      const title = titleEl ? titleEl.textContent.trim() : '';
+      const codeEl = panel.querySelector('pre code');
+      if (!codeEl) return;
+      let code = codeEl.textContent || '';
+      // Strip helper markers and zero-width spaces/highlights
+      code = code.replace(/IGNORE_WHEN_COPYING_START[\s\S]*?IGNORE_WHEN_COPYING_END/g, '');
+      code = code.replace(/\u200B/g, '');
+      if (/^JSON$/i.test(title)) {
+        // Find first balanced JSON object
+        const json = extractFirstBalancedJson(code);
+        if (json && !result.json) result.json = json;
+        // If Mermaid is embedded after JSON, capture it
+        if (!result.mermaid) {
+          const idx = code.indexOf('gitGraph');
+          if (idx !== -1) {
+            result.mermaid = code.substring(idx).replace(/```/g, '').trim();
+          }
+        }
+      } else if (/^Mermaid$/i.test(title)) {
+        if (!result.mermaid) result.mermaid = code.replace(/```/g, '').trim();
+      }
+    });
+    return result;
+  } catch (_) {
+    return { json: null, mermaid: null };
+  }
+}
+
+// Brace-balanced JSON slice extractor
+function extractFirstBalancedJson(text) {
+  const start = text.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') depth--;
+    if (depth === 0) {
+      const slice = text.substring(start, i + 1);
+      try { JSON.parse(slice); return slice; } catch (_) { return null; }
+    }
+  }
+  return null;
 }
 
 // New function to load analysis from the last model message
