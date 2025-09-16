@@ -1489,14 +1489,29 @@ async function loadAnalysis(showAlerts = true) {
     console.log("CS: Thread map keys:", Object.keys(threadMap));
     console.log("CS: Thread map values:", Object.values(threadMap));
     
-    // Use current chat ID and save the thread map
+    // Enhance thread map with turn IDs from scraped history
+    console.log("CS: Enhancing thread map with turn IDs...");
+    const enhancedThreadMap = {};
+    for (const [messageNum, threadName] of Object.entries(threadMap)) {
+      const messageIndex = parseInt(messageNum) - 1; // Convert to 0-based index
+      const turnId = (scrapedHistory[messageIndex] && scrapedHistory[messageIndex].turnId) || null;
+      
+      enhancedThreadMap[messageNum] = {
+        thread: threadName,
+        turnId: turnId
+      };
+      
+      console.log(`CS: Message ${messageNum}: "${threadName}" -> turnId: ${turnId}`);
+    }
+    
+    // Use current chat ID and save the enhanced thread map
     const chatId = getCurrentChatId();
     console.log("CS: Current chat ID:", chatId);
     
     if (chatId) {
-      console.log("CS: Saving thread map and visualization data to storage...");
+      console.log("CS: Saving enhanced thread map and visualization data to storage...");
       const storageData = { 
-        [`thread_map_${chatId}`]: threadMap,
+        [`thread_map_${chatId}`]: enhancedThreadMap,
         [`analysis_completed_${chatId}`]: true,
         current_chat_id: chatId // Update current chat ID
       };
@@ -1515,6 +1530,11 @@ async function loadAnalysis(showAlerts = true) {
       
       chrome.storage.local.set(storageData);
       console.log("CS: Thread map and visualization data saved to storage");
+      
+      // Clear the data_cleared flag since we have new data
+      chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
+        console.log("CS: Cleared data_cleared flag for chat:", chatId);
+      });
     } else {
       console.log("CS: ERROR - No chat ID found");
     }
@@ -1846,6 +1866,12 @@ async function goToBranch(threadName) {
   const threadMap = data[`thread_map_${chatId}`];
   const chatHistory = data[`chat_history_${chatId}`];
   
+  console.log("CS: === STORAGE DATA DEBUG ===");
+  console.log("CS: Thread Map:", threadMap);
+  console.log("CS: Chat History length:", chatHistory.length);
+  console.log("CS: First 3 chat history entries:", chatHistory.slice(0, 3));
+  console.log("CS: Last 3 chat history entries:", chatHistory.slice(-3));
+  
   console.log("CS: Looking for branch name:", threadName);
   
   // Find the last message in this branch
@@ -1853,46 +1879,92 @@ async function goToBranch(threadName) {
   let lastTurnId = null;
   let lastMessageNumber = null;
   
+  console.log("CS: === SEARCHING FOR BRANCH ===");
   // Go through messages from end to start to find the last occurrence of this thread
-  for (let i = chatHistory.length - 1; i >= 0; i--) {
-    const messageNum = i + 1; // Messages are 1-indexed in threadMap
-    if (threadMap[messageNum] === threadName) {
-      lastMessageInThread = chatHistory[i];
-      lastTurnId = lastMessageInThread.turnId;
+  for (let messageNum = Object.keys(threadMap).length; messageNum >= 1; messageNum--) {
+    const threadData = threadMap[messageNum];
+    
+    // Handle both old format (string) and new format (object with thread and turnId)
+    const threadForMessage = threadData.thread || threadData; // threadData.thread for new format, threadData for old format
+    const storedTurnId = threadData.turnId || null; // Only available in new format
+    
+    console.log(`CS: Message ${messageNum}: Thread="${threadForMessage}", StoredTurnId="${storedTurnId}"`);
+    
+    if (threadForMessage === threadName) {
+      // Get the corresponding message from chat history
+      lastMessageInThread = chatHistory[messageNum - 1]; // Convert to 0-based index
+      lastTurnId = storedTurnId || (lastMessageInThread && lastMessageInThread.turnId); // Use stored turn ID or fallback
       lastMessageNumber = messageNum;
-      console.log(`CS: Found last message in branch "${threadName}" at message ${messageNum}, turnId: ${lastTurnId}`);
+      
+      // Show first few words of the message content for verification
+      const messagePreview = (lastMessageInThread.textContent || lastMessageInThread.richContent || 'No content').substring(0, 100);
+      console.log(`CS: ✅ FOUND last message in branch "${threadName}" at message ${messageNum}`);
+      console.log(`CS: 🎯 Using stored turnId: ${storedTurnId || 'Not stored, using fallback'}`);
+      console.log(`CS: 📝 Message content preview: "${messagePreview}..."`);
       break;
     }
   }
   
+  if (!lastMessageInThread) {
+    console.log("CS: ❌ ERROR - No message found for branch:", threadName);
+    console.log("CS: Available branches in thread map:", Object.values(threadMap));
+    return;
+  }
+  
   // If turnId is undefined (old analysis data), try to find the turn element by scanning the page
   if (!lastTurnId && lastMessageNumber) {
-    console.log(`CS: Turn ID is undefined for message ${lastMessageNumber}, trying to find turn element by scanning page...`);
+    console.log(`CS: ⚠️ Turn ID is undefined for message ${lastMessageNumber}, trying to find turn element by scanning page...`);
     const allTurns = document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn');
     console.log(`CS: Found ${allTurns.length} total turns on page`);
     
+    // Log all turn IDs on the page for debugging
+    console.log("CS: === ALL TURN IDs ON PAGE ===");
+    allTurns.forEach((turn, index) => {
+      console.log(`CS: Turn ${index}: ID="${turn.id}"`);
+    });
+    
     // Try to map the message number to a turn element by position
-    // Since turns are in reverse order (newest first), we need to calculate position
+    // Turns are in the same order as messages (first message = first turn, etc.)
     if (allTurns.length > 0) {
-      const turnIndex = allTurns.length - lastMessageNumber; // Convert to 0-based index from end
+      const turnIndex = lastMessageNumber - 1; // Convert to 0-based index (message 1 = index 0)
       if (turnIndex >= 0 && turnIndex < allTurns.length) {
         const estimatedTurn = allTurns[turnIndex];
         lastTurnId = estimatedTurn.id;
         console.log(`CS: Estimated turn ID by position: ${lastTurnId} (index ${turnIndex})`);
+        console.log(`CS: Message ${lastMessageNumber} should map to turn index ${turnIndex} out of ${allTurns.length} total turns`);
+      } else {
+        console.log(`CS: Invalid turn index ${turnIndex} for ${allTurns.length} turns`);
       }
     }
   }
   
   if (!lastTurnId) {
-    console.log("CS: ERROR - Could not find turn ID for branch:", threadName);
+    console.log("CS: ❌ ERROR - Could not find turn ID for branch:", threadName);
     console.log("CS: SUGGESTION - Please re-run the analysis to generate turn IDs for branch navigation");
     return;
   }
   
+  console.log("CS: === ATTEMPTING NAVIGATION ===");
+  console.log("CS: Target turn ID:", lastTurnId);
+  
   // Find the turn element on the page and scroll to it
   const turnElement = document.getElementById(lastTurnId);
   if (turnElement) {
-    console.log("CS: Scrolling to turn:", lastTurnId);
+    console.log("CS: ✅ Found turn element, scrolling to turn:", lastTurnId);
+    
+    // Log some info about the element we found
+    const turnContent = turnElement.querySelector('.turn-content');
+    if (turnContent) {
+      const contentPreview = turnContent.textContent?.substring(0, 100) || 'No text content';
+      console.log("CS: 🎯 ACTUAL turn content:", contentPreview);
+      
+      const expectedContent = (lastMessageInThread.textContent || lastMessageInThread.richContent || 'No content').substring(0, 100);
+      console.log("CS: 📝 EXPECTED content:", expectedContent);
+      
+      const isMatch = contentPreview.includes(expectedContent.substring(0, 30)) || expectedContent.includes(contentPreview.substring(0, 30));
+      console.log("CS: ⚖️ CONTENT MATCH:", isMatch);
+    }
+    
     turnElement.scrollIntoView({ 
       behavior: 'smooth', 
       block: 'center',
@@ -1906,10 +1978,17 @@ async function goToBranch(threadName) {
       turnElement.style.backgroundColor = '';
     }, 2000);
     
-    console.log("CS: Successfully navigated to branch");
+    console.log("CS: ✅ Successfully navigated to branch");
   } else {
-    console.log("CS: ERROR - Could not find turn element with ID:", lastTurnId);
+    console.log("CS: ❌ ERROR - Could not find turn element with ID:", lastTurnId);
+    console.log("CS: Available turn elements on page:");
+    const allTurns = document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn');
+    allTurns.forEach((turn, index) => {
+      console.log(`CS:   Turn ${index}: ID="${turn.id}"`);
+    });
   }
+  
+  console.log("CS: ===== GO TO BRANCH END =====");
 }
 
 function insertPrompt(text) {

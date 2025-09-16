@@ -416,7 +416,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Only check page for fresh data if user hasn't recently cleared data
         if (!dataWasCleared) {
+          console.log('AUTO-LOAD: Checking page for fresh data...');
           sendMessageToContentScript({ action: 'loadAnalysis' }, (pageResult) => {
+            console.log('AUTO-LOAD: Page result:', pageResult);
             if (pageResult && (pageResult.hasJsonData || pageResult.hasMermaidData)) {
               console.log('AUTO-LOAD: Found fresh data on page, loading it');
               // Fresh page data available, load it (this will override storage data)
@@ -424,6 +426,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (!hasStoredThreadMap && !hasStoredJsonData && !hasStoredMermaidData) {
               console.log('AUTO-LOAD: No data available anywhere');
               hideAllDataSections();
+            } else {
+              console.log('AUTO-LOAD: No fresh page data, using storage data');
             }
           });
         } else {
@@ -439,7 +443,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadDataFromStorage(storageData, chatId) {
       // Load thread selector if available
       if (storageData[`thread_map_${chatId}`]) {
-        const threadNames = [...new Set(Object.values(storageData[`thread_map_${chatId}`]))];
+        // Extract thread names, handling both old format (string) and new format (object)
+        const threadMapData = storageData[`thread_map_${chatId}`];
+        const threadNames = [...new Set(Object.values(threadMapData).map(item => 
+          typeof item === 'string' ? item : item.thread
+        ))];
         if (threadNames.length > 0) {
           console.log('AUTO-LOAD: Loading thread selector with', threadNames.length, 'threads');
           populateThreadSelector(threadNames);
@@ -525,7 +533,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Determine main branch (most common thread name)
     const threadCounts = {};
-    Object.values(threadMap).forEach(thread => {
+    Object.values(threadMap).forEach(item => {
+      const thread = typeof item === 'string' ? item : item.thread;
       threadCounts[thread] = (threadCounts[thread] || 0) + 1;
     });
     const mainBranch = Object.keys(threadCounts).reduce((a, b) => threadCounts[a] > threadCounts[b] ? a : b);
@@ -571,7 +580,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function getMessagePositionsForBranch(threadName, threadMap) {
     const positions = [];
     Object.keys(threadMap).forEach(messageNum => {
-      if (threadMap[messageNum] === threadName) {
+      const item = threadMap[messageNum];
+      const thread = typeof item === 'string' ? item : item.thread;
+      if (thread === threadName) {
         positions.push(parseInt(messageNum));
       }
     });
@@ -579,7 +590,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function sortBranchesGitStyle(branches) {
-    return branches.sort((a, b) => {
+    console.log('BRANCH SORTING DEBUG:');
+    branches.forEach(branch => {
+      console.log(`Branch: "${branch.name}", isMain: ${branch.isMain}, lastPosition: ${branch.lastPosition}, messageCount: ${branch.messageCount}`);
+    });
+    
+    const sorted = branches.sort((a, b) => {
       // Main branch first
       if (a.isMain && !b.isMain) return -1;
       if (!a.isMain && b.isMain) return 1;
@@ -587,6 +603,13 @@ document.addEventListener('DOMContentLoaded', () => {
       // Then by last activity (most recent first)
       return b.lastPosition - a.lastPosition;
     });
+    
+    console.log('SORTED ORDER:');
+    sorted.forEach((branch, index) => {
+      console.log(`${index + 1}. "${branch.name}" (lastPosition: ${branch.lastPosition})`);
+    });
+    
+    return sorted;
   }
 
   function formatBranchOption(branch) {
@@ -608,8 +631,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function populateThreadSelector(threadNames) {
+    console.log('POPULATE THREAD SELECTOR called with:', threadNames);
     threadSelector.innerHTML = ''; // Clear the list
-    
+
     // Add default option
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
@@ -625,12 +649,15 @@ document.addEventListener('DOMContentLoaded', () => {
           const savedBranch = result[`selected_branch_${response.chatId}`];
           
           if (threadMap && chatHistory) {
+            console.log('USING GIT-STYLE SORTING with thread map and chat history');
             const branchInfo = calculateBranchInfo(threadNames, threadMap, chatHistory);
             
             // Sort branches by git-style priority (main first, then by activity)
             const sortedBranches = sortBranchesGitStyle(branchInfo);
             
-            sortedBranches.forEach(branch => {
+            console.log('ADDING OPTIONS TO DROPDOWN IN THIS ORDER:');
+            sortedBranches.forEach((branch, index) => {
+              console.log(`Adding option ${index + 1}: "${branch.name}"`);
               const option = document.createElement('option');
               option.value = branch.name;
               option.textContent = formatBranchOption(branch);
@@ -686,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Send the message
       chrome.tabs.sendMessage(activeTabId, message, (response) => {
         if (chrome.runtime.lastError) {
-          console.error('Error sending message to content script:', chrome.runtime.lastError);
+          console.error('Error sending message to content script:', chrome.runtime.lastError.message || chrome.runtime.lastError);
           console.error('Content script not loaded');
           return;
         }
@@ -868,9 +895,11 @@ document.addEventListener('DOMContentLoaded', () => {
   goToBranchButton.addEventListener('click', () => {
     const selectedThread = threadSelector.value;
     if (selectedThread) {
-      console.log('Going to branch:', selectedThread);
-      sendMessageToContentScript({ action: 'goToBranch', threadName: selectedThread }, () => {
-        console.log('Branch navigation completed');
+      console.log('=== GO TO BRANCH CLICKED ===');
+      console.log('Selected branch:', selectedThread);
+      console.log('Sending goToBranch message to content script...');
+      sendMessageToContentScript({ action: 'goToBranch', threadName: selectedThread }, (response) => {
+        console.log('Branch navigation response:', response);
         // Close popup after successful navigation
         window.close();
       });
@@ -942,7 +971,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Listen for messages from content script
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'updateThreadDropdown') {
-      populateThreadSelector(request.threadNames);
+      // NOTE: Thread dropdown is now populated by loadDataFromStorage with proper sorting
+      // populateThreadSelector(request.threadNames); // REMOVED - this was overriding the sorted dropdown
       filteringView.classList.remove('hidden');
       dataManagementSection.classList.remove('hidden');
       
