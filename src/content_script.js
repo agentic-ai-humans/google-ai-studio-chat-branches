@@ -1426,6 +1426,8 @@ async function loadAnalysis(showAlerts = true) {
 
   if (domExtract.mermaid) {
     storageData[`mermaid_diagram_${chatId}`] = domExtract.mermaid;
+    console.log('CS: Storing Mermaid data, length:', domExtract.mermaid.length);
+    console.log('CS: Mermaid preview:', domExtract.mermaid.substring(0, 100) + '...');
   }
 
   if (storageData[`json_data_${chatId}`] || storageData[`mermaid_diagram_${chatId}`]) {

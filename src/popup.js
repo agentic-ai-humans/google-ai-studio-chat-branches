@@ -830,8 +830,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   copyMermaidButton.addEventListener('click', () => {
-    if (extractedMermaidData) {
-      copyToClipboard(extractedMermaidData, 'mermaid');
+    console.log('POPUP: Copy Mermaid clicked');
+    console.log('POPUP: extractedMermaidData:', extractedMermaidData ? extractedMermaidData.substring(0, 100) + '...' : 'null');
+    console.log('POPUP: extractedJsonData:', extractedJsonData ? extractedJsonData.substring(0, 100) + '...' : 'null');
+    
+    // Prefer stored mermaid; fallback to extracting from JSON blob if combined
+    const mermaidToCopy = extractedMermaidData || tryExtractMermaidFromJson(extractedJsonData);
+    console.log('POPUP: mermaidToCopy:', mermaidToCopy ? mermaidToCopy.substring(0, 100) + '...' : 'null');
+    
+    if (mermaidToCopy) {
+      copyToClipboard(mermaidToCopy, 'mermaid');
     } else {
       console.log('No Mermaid diagram available to copy');
     }
