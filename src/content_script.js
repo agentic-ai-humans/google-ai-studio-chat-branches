@@ -1222,6 +1222,11 @@ function watchForAnalysisResponse(scrapedHistory) {
               
               // Notify popup that new analysis data is available
               safeSendToPopup({ action: 'analysisCompleted', chatId: chatId });
+
+              // Return UI to the bottom where the user started
+              setTimeout(() => {
+                try { scrollToBottomOfChat(); } catch (e) { /* noop */ }
+              }, 300);
             }
 
             observer.disconnect();
@@ -1256,6 +1261,11 @@ function watchForAnalysisResponse(scrapedHistory) {
             
             // Notify popup that new analysis data is available
             safeSendToPopup({ action: 'analysisCompleted', chatId: chatId });
+
+            // Return UI to the bottom where the user started
+            setTimeout(() => {
+              try { scrollToBottomOfChat(); } catch (e) { /* noop */ }
+            }, 300);
           }
 
           observer.disconnect();
@@ -1301,6 +1311,11 @@ function watchForAnalysisResponse(scrapedHistory) {
             
             // Notify popup that new analysis data is available
             safeSendToPopup({ action: 'analysisCompleted', chatId: chatId });
+
+            // Return UI to the bottom where the user started
+            setTimeout(() => {
+              try { scrollToBottomOfChat(); } catch (e) { /* noop */ }
+            }, 300);
           }
           observer.disconnect();
         } catch (error) {
