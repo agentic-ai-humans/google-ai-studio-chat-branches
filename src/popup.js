@@ -441,30 +441,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadDataFromStorage(storageData, chatId) {
-      // Load branch selector if available
-      if (storageData[`branch_map_${chatId}`]) {
-        // Extract branch names, handling both old format (string) and new format (object)
-        const branchMapData = storageData[`branch_map_${chatId}`];
-        const branchNames = [...new Set(Object.values(branchMapData).map(item => 
-          typeof item === 'string' ? item : item.thread
-        ))];
-        if (branchNames.length > 0) {
-          console.log('AUTO-LOAD: Loading branch selector with', branchNames.length, 'branches');
-          populateBranchSelector(branchNames);
-          filteringView.classList.remove('hidden');
-          dataManagementSection.classList.remove('hidden');
-        }
-      }
-      
-      // Load visualization data if available
+      // Prefer JSON to derive branch list (no dependency on branch_map)
       extractedJsonData = storageData[`json_data_${chatId}`] || null;
       extractedMermaidData = storageData[`mermaid_diagram_${chatId}`] || null;
+
+      let branchNames = [];
+      if (extractedJsonData) {
+        try {
+          const json = JSON.parse(extractedJsonData);
+          if (json && json.type === 'gitGraph' && Array.isArray(json.actions)) {
+            const names = new Set();
+            json.actions.forEach(action => {
+              if (action && action.type === 'commit' && action.branch_hint) {
+                names.add(String(action.branch_hint).trim());
+              }
+              if (action && action.type === 'branch' && action.name) {
+                names.add(String(action.name).trim());
+              }
+            });
+            branchNames = Array.from(names).filter(n => n && n.toLowerCase() !== 'gitgraph');
+          }
+        } catch (e) {
+          console.warn('Failed to parse structured JSON for branch list', e);
+        }
+      }
+
+      if (branchNames.length > 0) {
+        console.log('AUTO-LOAD: Loading branch selector with', branchNames.length, 'branches (from JSON)');
+        populateBranchSelector(branchNames);
+        filteringView.classList.remove('hidden');
+        dataManagementSection.classList.remove('hidden');
+      }
       
       // If we have branch data, always show the visualization section
       // (even if no JSON/Mermaid data yet - user can generate it)
-      if (storageData[`branch_map_${chatId}`] || extractedJsonData || extractedMermaidData) {
+      if (extractedJsonData || extractedMermaidData || storageData[`branch_map_${chatId}`]) {
         console.log('AUTO-LOAD: Showing visualization section:', {
-          hasBranches: !!storageData[`branch_map_${chatId}`],
+          hasBranches: branchNames.length > 0,
           hasJson: !!extractedJsonData,
           hasMermaid: !!extractedMermaidData
         });
@@ -809,20 +822,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  function tryExtractMermaidFromJson(jsonText) {
+    if (!jsonText || typeof jsonText !== 'string') return null;
+    // If someone stored JSON and Mermaid in one blob, locate gitGraph segment
+    const backtickClean = jsonText.replace(/```/g, '');
+    const idx = backtickClean.indexOf('gitGraph');
+    if (idx === -1) return null;
+    const tail = backtickClean.substring(idx);
+    // Stop at next closing fence if present (best-effort)
+    const fenceIdx = tail.indexOf('```');
+    const mermaid = (fenceIdx !== -1 ? tail.substring(0, fenceIdx) : tail).trim();
+    return mermaid.startsWith('gitGraph') ? mermaid : null;
+  }
+
   showGraphButton.addEventListener('click', () => {
-    if (!extractedMermaidData) {
+    // Prefer stored mermaid; fallback to extracting from JSON blob if combined
+    const mermaidToShow = extractedMermaidData || tryExtractMermaidFromJson(extractedJsonData);
+    if (!mermaidToShow) {
       console.log('No Mermaid diagram available to show');
       return;
     }
     try {
       // Always send plain Mermaid code (no JSON config) to mermaid.live
-      const simpleBase64 = btoa(extractedMermaidData.trim());
+      const simpleBase64 = btoa(mermaidToShow.trim());
       const url = `https://mermaid.live/edit#base64:${simpleBase64}`;
       chrome.tabs.create({ url });
     } catch (err) {
       console.warn('Failed to open mermaid.live with base64 code. Falling back to clipboard.');
       chrome.tabs.create({ url: 'https://mermaid.live/edit' });
-      copyToClipboard(extractedMermaidData, 'mermaid');
+      copyToClipboard(mermaidToShow, 'mermaid');
     }
   });
 
