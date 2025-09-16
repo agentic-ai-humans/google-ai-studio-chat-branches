@@ -1217,7 +1217,7 @@ function watchForAnalysisResponse(scrapedHistory) {
             return;
           }
         } catch (err) {
-          console.warn('CS: DOM-first extraction failed, falling back to text parsing', err);
+          console.warn('CS: DOM-first extraction failed', err);
         }
       }
 
@@ -1334,288 +1334,55 @@ async function loadAnalysis(showAlerts = true) {
   console.log("CS: Found last model turn:", lastModelTurn);
   console.log("CS: Last model turn classes:", lastModelTurn.className);
   console.log("CS: Last model turn HTML preview:", lastModelTurn.outerHTML.substring(0, 500) + "...");
-  
-  // Wait a bit for content to load, then try to get it directly
-  console.log("CS: Waiting 1 second for content to load...");
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  
-  // Try multiple selectors to find content
-  console.log("CS: Looking for content node...");
-  let contentNode = lastModelTurn.querySelector('ms-cmark-node');
-  console.log("CS: ms-cmark-node found:", !!contentNode);
-  
-  if (!contentNode) {
-    contentNode = lastModelTurn.querySelector('.turn-content');
-    console.log("CS: .turn-content found:", !!contentNode);
-  }
-  if (!contentNode) {
-    contentNode = lastModelTurn.querySelector('[data-turn-role="Model"]');
-    console.log("CS: [data-turn-role='Model'] found:", !!contentNode);
-  }
-  if (!contentNode) {
-    // Try to find any text content in the turn
-    contentNode = lastModelTurn;
-    console.log("CS: Using lastModelTurn as content node");
-  }
-  
-  console.log("CS: Final content node:", contentNode);
-  console.log("CS: Content node tag name:", contentNode.tagName);
-  console.log("CS: Content node classes:", contentNode.className);
-  
-  // Check if we need to expand collapsed panels to get the JSON
-  console.log("CS: Checking for collapsed panels...");
-  const collapsedPanels = contentNode.querySelectorAll('mat-expansion-panel[aria-expanded="false"]');
-  console.log("CS: Found collapsed panels:", collapsedPanels.length);
-  
-  if (collapsedPanels.length > 0) {
-    console.log('CS: Found collapsed panels, expanding them to access content');
-    collapsedPanels.forEach((panel, index) => {
-      console.log(`CS: Expanding panel ${index + 1}:`, panel);
-      const header = panel.querySelector('mat-expansion-panel-header');
-      if (header) {
-        console.log(`CS: Clicking header for panel ${index + 1}`);
-        header.click(); // Expand the panel
-      } else {
-        console.log(`CS: No header found for panel ${index + 1}`);
+
+  // DOM-first extraction from the last model turn
+  const domExtract = extractJsonAndMermaidFromDom(lastModelTurn);
+  const chatId = getCurrentChatId();
+  if (!chatId) { console.log('CS: ERROR - No chat ID found'); return; }
+  const storageData = { current_chat_id: chatId };
+  let enhancedBranchMap = {};
+
+  if (domExtract.json) {
+    storageData[`json_data_${chatId}`] = domExtract.json;
+    try {
+      const stored = await chrome.storage.local.get([`chat_history_${chatId}`]);
+      const chatHistory = stored[`chat_history_${chatId}`] || [];
+      const gitGraph = JSON.parse(domExtract.json);
+      if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
+        gitGraph.actions.forEach(action => {
+          if (action && action.type === 'commit' && action.id) {
+            const turnId = String(action.id);
+            const branchName = String(action.branch_hint || action.branch || '').trim();
+            if (!branchName) return;
+            const idx = chatHistory.findIndex(m => m.turnId === turnId);
+            if (idx !== -1) {
+              const messageNum = idx + 1;
+              enhancedBranchMap[messageNum] = { thread: branchName, turnId };
+            }
+          }
+        });
+        storageData[`branch_map_${chatId}`] = enhancedBranchMap;
       }
-    });
-    // Wait a bit for the panels to expand
-    console.log("CS: Waiting 500ms for panels to expand...");
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-  
-  if (!contentNode) {
-    console.log("CS: No content node found in last model turn");
-    console.error("CS: Could not find content in the last model message");
-    return;
+    } catch (e) {
+      console.warn('CS: Failed to parse DOM-extracted JSON in loadAnalysis', e);
+    }
   }
 
-  console.log("CS: Extracting text content...");
-  let responseText = contentNode.innerText ? contentNode.innerText.trim() : '';
-  console.log("CS: Initial response text length:", responseText.length);
-  console.log("CS: Initial response text preview:", responseText.substring(0, 200) + "...");
-  
-  // If no text found, try to get text from all code blocks including collapsed ones
-  if (responseText.length === 0 || !responseText.includes('{')) {
-    console.log("CS: No JSON found in main text, searching in all code blocks");
-    const allCodeBlocks = lastModelTurn.querySelectorAll('pre code, .mat-expansion-panel-body pre code');
-    console.log("CS: Found code blocks:", allCodeBlocks.length);
-    
-    let allText = '';
-    allCodeBlocks.forEach((block, index) => {
-      const blockText = block.innerText;
-      console.log(`CS: Code block ${index + 1} text:`, blockText.substring(0, 100) + "...");
-      allText += blockText + '\n';
+  if (domExtract.mermaid) {
+    storageData[`mermaid_diagram_${chatId}`] = domExtract.mermaid;
+  }
+
+  if (storageData[`json_data_${chatId}`] || storageData[`mermaid_diagram_${chatId}`]) {
+    storageData[`analysis_completed_${chatId}`] = true;
+    chrome.storage.local.set(storageData);
+    chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
+      console.log('CS: Cleared data_cleared flag for chat:', chatId);
     });
-    
-    if (allText.trim().length > 0) {
-      responseText = allText.trim();
-      console.log("CS: Combined text from all code blocks length:", responseText.length);
-      console.log("CS: Combined text preview:", responseText.substring(0, 300) + "...");
-    } else {
-      console.log("CS: No text found in any code blocks");
-    }
+    // Notify popup to auto-reload
+    safeSendToPopup({ action: 'analysisCompleted', chatId });
+    console.log('CS: ===== LOAD ANALYSIS SUCCESS (DOM-first) =====');
   } else {
-    console.log("CS: JSON found in main text content");
-  }
-  
-  if (responseText.length === 0) {
-    console.log("CS: No text content found in the last model message");
-    if (showAlerts) {
-      alert("The last model message appears to be empty. Please ensure the AI has finished responding.");
-    }
-    return;
-  }
-
-  // Try to extract JSON and Mermaid from the response - handle both markdown and new code block structure
-  console.log("CS: ===== JSON & MERMAID EXTRACTION START =====");
-  let jsonString = null;
-  let mermaidString = null;
-  
-  // NEW: Try to extract from ms-code-block structure first
-  console.log("CS: Checking for new code block structure...");
-  const codeBlocks = lastModelTurn.querySelectorAll('ms-code-block');
-  console.log(`CS: Found ${codeBlocks.length} code blocks`);
-  
-  codeBlocks.forEach((codeBlock, index) => {
-    const title = codeBlock.querySelector('mat-panel-title span:last-child');
-    const codeElement = codeBlock.querySelector('pre code');
-    
-    if (title && codeElement) {
-      const titleText = title.textContent.trim().toLowerCase();
-      const codeContent = codeElement.textContent || codeElement.innerText || '';
-      
-      console.log(`CS: Code block ${index + 1}: "${titleText}" (${codeContent.length} chars)`);
-      
-      if (titleText === 'json' && codeContent.trim().startsWith('{')) {
-        // Check if this is a combined JSON+Mermaid block
-        if (codeContent.includes('```mermaid') || codeContent.includes('gitGraph')) {
-          console.log("CS: WARNING - Detected combined JSON+Mermaid block, attempting to split...");
-          
-          // Try to extract JSON part (everything before ```mermaid or gitGraph)
-          const jsonMatch = codeContent.match(/^[\s\S]*?}(?=\s*```mermaid|\s*gitGraph)/);
-          if (jsonMatch) {
-            jsonString = jsonMatch[0].trim();
-            console.log("CS: SUCCESS - Extracted JSON from combined block");
-            console.log("CS: JSON preview:", jsonString.substring(0, 200) + "...");
-          }
-          
-          // Try to extract Mermaid part
-          const mermaidMatch = codeContent.match(/(?:```mermaid\s*)?(gitGraph[\s\S]+?)(?:```|$)/);
-          if (mermaidMatch) {
-            mermaidString = mermaidMatch[1].trim();
-            console.log("CS: SUCCESS - Extracted Mermaid from combined block");
-            console.log("CS: Mermaid preview:", mermaidString.substring(0, 200) + "...");
-          }
-        } else {
-          // Pure JSON block
-          jsonString = codeContent.trim();
-          console.log("CS: SUCCESS - Found pure JSON in code block structure");
-          console.log("CS: JSON preview:", jsonString.substring(0, 200) + "...");
-        }
-      } else if (titleText === 'mermaid' && codeContent.includes('gitGraph')) {
-        mermaidString = codeContent.trim();
-        console.log("CS: SUCCESS - Found Mermaid in code block structure");
-        console.log("CS: Mermaid preview:", mermaidString.substring(0, 200) + "...");
-      }
-    }
-  });
-  
-  // Fallback to old extraction methods if new structure didn't work
-  if (!jsonString || !mermaidString) {
-    console.log("CS: Falling back to text-based extraction...");
-    
-    // Extract Mermaid diagram first
-    console.log("CS: Trying to extract Mermaid diagram...");
-    const mermaidMatch = responseText.match(/```mermaid\s*([\s\S]+?)\s*```/);
-    if (mermaidMatch && !mermaidString) {
-      mermaidString = mermaidMatch[1];
-      console.log("CS: SUCCESS - Found Mermaid diagram");
-      console.log("CS: Mermaid preview:", mermaidString.substring(0, 200) + "...");
-    } else if (!mermaidString) {
-      // Try without the markdown wrapper
-      const gitGraphMatch = responseText.match(/gitGraph[\s\S]+?(?=```|$)/);
-      if (gitGraphMatch) {
-        mermaidString = gitGraphMatch[0];
-        console.log("CS: SUCCESS - Found Mermaid diagram without wrapper");
-        console.log("CS: Mermaid preview:", mermaidString.substring(0, 200) + "...");
-      } else {
-        console.log("CS: No Mermaid diagram found");
-      }
-    }
-    
-    // Extract JSON - Prioritize ```json format since we explicitly request it
-    if (!jsonString) {
-      console.log("CS: Trying markdown format (```json ... ```)");
-      const markdownMatch = responseText.match(/```json\s*([\s\S]+?)\s*```/);
-      if (markdownMatch) {
-        jsonString = markdownMatch[1];
-        console.log("CS: SUCCESS - Found markdown JSON format");
-        console.log("CS: Markdown JSON preview:", jsonString.substring(0, 200) + "...");
-      } else {
-        console.log("CS: No markdown JSON format found");
-        
-        // Fallback: Try to find JSON object in the text (look for { ... } pattern)
-        console.log("CS: Trying JSON object format ({ ... })");
-        const jsonObjectMatch = responseText.match(/\{[\s\S]*?\}(?=\s*```|\s*$)/);
-        if (jsonObjectMatch) {
-          jsonString = jsonObjectMatch[0];
-          console.log("CS: SUCCESS - Found JSON object format");
-          console.log("CS: JSON object preview:", jsonString.substring(0, 200) + "...");
-        } else {
-          console.log("CS: No JSON object format found");
-          console.log("CS: Looking for any curly braces...");
-          const hasBraces = responseText.includes('{') && responseText.includes('}');
-          console.log("CS: Contains curly braces:", hasBraces);
-          
-          if (hasBraces) {
-            console.log("CS: Found braces but no complete JSON match");
-            console.log("CS: Full response text for debugging:", responseText.substring(0, 1000) + "...");
-          }
-        }
-      }
-    }
-  }
-  
-  if (!jsonString) {
-    console.log("CS: INFO - No JSON analysis data found in current response");
-    return;
-  }
-
-  try {
-    console.log("CS: ===== JSON PARSING START =====");
-    console.log("CS: Attempting to parse JSON string:", jsonString.substring(0, 300) + "...");
-    const branchMap = JSON.parse(jsonString);
-    console.log("CS: SUCCESS - JSON parsed successfully");
-    console.log("CS: Thread map object:", branchMap);
-    console.log("CS: Thread map keys:", Object.keys(branchMap));
-    console.log("CS: Thread map values:", Object.values(branchMap));
-    
-    // Use current chat ID and save the thread map (already processed during analysis)
-    const chatId = getCurrentChatId();
-    console.log("CS: Current chat ID:", chatId);
-    
-    if (chatId) {
-      console.log("CS: Saving thread map and visualization data to storage...");
-      const storageData = { 
-        [`branch_map_${chatId}`]: branchMap,
-        [`analysis_completed_${chatId}`]: true,
-        current_chat_id: chatId // Update current chat ID
-      };
-      
-      // Also save Mermaid data if available
-      if (mermaidString) {
-        storageData[`mermaid_diagram_${chatId}`] = mermaidString;
-        console.log("CS: Also saving Mermaid diagram to storage");
-      }
-      
-      // Save original JSON for separate copying
-      if (jsonString) {
-        storageData[`json_data_${chatId}`] = jsonString;
-        console.log("CS: Also saving original JSON to storage");
-      }
-      
-      chrome.storage.local.set(storageData);
-      console.log("CS: Thread map and visualization data saved to storage");
-      
-      // Clear the data_cleared flag since we have new data
-      chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
-        console.log("CS: Cleared data_cleared flag for chat:", chatId);
-      });
-    } else {
-      console.log("CS: ERROR - No chat ID found");
-    }
-    
-    // Get unique thread names for the dropdown
-    const branchNames = [...new Set(Object.values(branchMap))];
-    console.log("CS: Unique thread names extracted:", branchNames);
-    console.log("CS: Number of unique threads:", branchNames.length);
-    
-    // Get the timestamp for this chat and send to popup
-    console.log("CS: Getting timestamp for popup...");
-    chrome.storage.local.get([`data_created_${chatId}`], (timestampData) => {
-      console.log("CS: Sending message to popup...");
-      // Send message to popup to update the dropdown
-      chrome.runtime.sendMessage({ 
-        action: 'updateThreadDropdown', 
-        branchNames: branchNames,
-        timestamp: timestampData[`data_created_${chatId}`]
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.log("CS: Popup is closed, message not delivered:", chrome.runtime.lastError.message);
-        } else {
-          console.log("CS: Message sent to popup successfully");
-        }
-      });
-    });
-    
-    console.log("CS: ===== LOAD ANALYSIS SUCCESS =====");
-    console.log(`Analysis loaded successfully! Found ${branchNames.length} threads: ${branchNames.join(', ')}`);
-    
-  } catch (error) {
-    console.error("CS: ERROR - Failed to parse JSON from AI response:", error);
-    console.error("CS: JSON string that failed to parse:", jsonString);
-    console.error("Failed to parse the analysis data");
+    console.log('CS: INFO - No artifacts extracted from DOM in loadAnalysis');
   }
 }
 
