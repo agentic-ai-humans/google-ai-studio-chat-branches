@@ -1986,10 +1986,13 @@ async function goToBranch(branchName) {
       continue;
     }
     
-    // Handle both old format (string) and new format (object with thread and turnId)
-    const isObjectFormat = typeof threadData === 'object' && threadData !== null;
-    const threadForMessage = isObjectFormat ? threadData.thread : threadData;
-    const storedTurnId = isObjectFormat ? (threadData.turnId || null) : null; // Only available in new format
+    // New format only: object with thread and turnId
+    if (typeof threadData !== 'object' || threadData === null) {
+      console.warn(`CS: Unexpected data format at ${messageNum}, expected { thread, turnId }`);
+      continue;
+    }
+    const threadForMessage = threadData.thread;
+    const storedTurnId = threadData.turnId || null;
     
     console.log(`CS: Message ${messageNum}: Thread="${threadForMessage}", StoredTurnId="${storedTurnId}"`);
     
