@@ -1177,10 +1177,10 @@ Generate the TWO SEPARATE code blocks now (JSON first, then Mermaid):`;
     hideProgressOverlay();
   }, 3000); // Keep overlay visible for 3 seconds to show completion
   
-  setTimeout(watchForAnalysisResponse, 2000); 
+  setTimeout(() => watchForAnalysisResponse(scrapedHistory), 2000); 
 }
 
-function watchForAnalysisResponse() {
+function watchForAnalysisResponse(scrapedHistory) {
   const lastModelTurn = Array.from(document.querySelectorAll(`${pageConfig.turnSelector}.model`)).pop();
   if (!lastModelTurn) return;
 
@@ -1206,8 +1206,38 @@ function watchForAnalysisResponse() {
       if (jsonString) {
         try {
           const threadMap = JSON.parse(jsonString);
-          chrome.storage.local.set({ thread_map: threadMap });
-          console.log("CS: Thread map saved to storage.");
+          
+          // Enhance thread map with turn IDs from scraped history
+          console.log("CS: Enhancing thread map with turn IDs...");
+          const enhancedThreadMap = {};
+          for (const [messageNum, threadName] of Object.entries(threadMap)) {
+            const messageIndex = parseInt(messageNum) - 1; // Convert to 0-based index
+            const turnId = (scrapedHistory[messageIndex] && scrapedHistory[messageIndex].turnId) || null;
+            
+            enhancedThreadMap[messageNum] = {
+              thread: threadName,
+              turnId: turnId
+            };
+            
+            console.log(`CS: Message ${messageNum}: "${threadName}" -> turnId: ${turnId}`);
+          }
+          
+          // Use current chat ID and save the enhanced thread map
+          const chatId = getCurrentChatId();
+          if (chatId) {
+            chrome.storage.local.set({ 
+              [`thread_map_${chatId}`]: enhancedThreadMap,
+              [`analysis_completed_${chatId}`]: true,
+              current_chat_id: chatId
+            });
+            console.log("CS: Enhanced thread map saved to storage.");
+            
+            // Clear the data_cleared flag since we have new data
+            chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
+              console.log("CS: Cleared data_cleared flag for chat:", chatId);
+            });
+          }
+          
           observer.disconnect();
         } catch (error) {
           console.error("CS: Failed to parse JSON from AI response.", error);
@@ -1489,29 +1519,14 @@ async function loadAnalysis(showAlerts = true) {
     console.log("CS: Thread map keys:", Object.keys(threadMap));
     console.log("CS: Thread map values:", Object.values(threadMap));
     
-    // Enhance thread map with turn IDs from scraped history
-    console.log("CS: Enhancing thread map with turn IDs...");
-    const enhancedThreadMap = {};
-    for (const [messageNum, threadName] of Object.entries(threadMap)) {
-      const messageIndex = parseInt(messageNum) - 1; // Convert to 0-based index
-      const turnId = (scrapedHistory[messageIndex] && scrapedHistory[messageIndex].turnId) || null;
-      
-      enhancedThreadMap[messageNum] = {
-        thread: threadName,
-        turnId: turnId
-      };
-      
-      console.log(`CS: Message ${messageNum}: "${threadName}" -> turnId: ${turnId}`);
-    }
-    
-    // Use current chat ID and save the enhanced thread map
+    // Use current chat ID and save the thread map (already processed during analysis)
     const chatId = getCurrentChatId();
     console.log("CS: Current chat ID:", chatId);
     
     if (chatId) {
-      console.log("CS: Saving enhanced thread map and visualization data to storage...");
+      console.log("CS: Saving thread map and visualization data to storage...");
       const storageData = { 
-        [`thread_map_${chatId}`]: enhancedThreadMap,
+        [`thread_map_${chatId}`]: threadMap,
         [`analysis_completed_${chatId}`]: true,
         current_chat_id: chatId // Update current chat ID
       };
