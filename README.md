@@ -1,6 +1,6 @@
-# Google AI Studio Chat Threads
+# Google AI Studio Chat Branches
 
-Transform your long AI conversations into organized, cherry-pickable threads with Git-like workflow and visual branch mapping.
+Transform your long AI conversations into organized, cherry-pickable branches with a Git-like workflow and visual branch mapping.
 
 ## The Problem
 
@@ -13,10 +13,10 @@ Long AI conversations inevitably branch into multiple topics - you start discuss
 
 ## The Solution: Git for Conversations
 
-This extension applies Git's branching model to AI conversations, treating each topic as a **thread branch** that can be visualized, isolated, and cherry-picked.
+This extension applies Git's branching model to AI conversations, treating each topic as a **branch** that can be visualized, isolated, and cherry-picked.
 
-### 🌳 **Visual Thread Mapping**
-The extension generates a **Mermaid Git graph** that visualizes your conversation like a code repository:
+### 🌳 **Visual Branch Mapping**
+The extension generates a **Mermaid Git graph** that visualizes your conversation like a repository:
 
 ```mermaid
 gitGraph
@@ -40,10 +40,10 @@ gitGraph
         commit id: "API Documentation"
 ```
 
-### 🍒 **Cherry-Pick Any Thread**
-Just like Git, you can extract any branch (thread) with its complete history:
-- **Main branch context**: All foundational discussion before the thread started
-- **Thread-specific messages**: The focused conversation about that topic
+### 🍒 **Cherry-Pick Any Branch**
+Just like Git, you can extract any branch with its complete history:
+- **Main branch context**: All foundational discussion before the branch started
+- **Branch-specific messages**: The focused conversation about that topic
 - **Clean markdown export**: Ready to paste into a new chat for continuation
 
 ## What It Does
@@ -51,17 +51,17 @@ Just like Git, you can extract any branch (thread) with its complete history:
 This extension implements a complete "Git-like" workflow for managing chat conversations:
 
 - **🔍 Analyze conversation structure** using AI to identify thematic branches
-- **📊 Generate visual thread maps** as Mermaid Git graphs
-- **🍒 Cherry-pick specific threads** from complex conversations with full context
+- **📊 Generate visual branch maps** as Mermaid Git graphs
+- **🍒 Cherry-pick specific branches** from complex conversations with full context
 - **📎 Handle file attachments** with smart detection and timestamp tracking
 - **🔄 Continue conversations** in new chats without losing historical context
 
 ### Key Features
 
-- 🌳 **Thread Analysis**: AI-powered conversation analysis to identify thematic branches
-- 🍒 **Cherry-Pick Threads**: Extract specific conversation threads with full context
+- 🌳 **Branch Analysis**: AI-powered conversation analysis to identify thematic branches
+- 🍒 **Cherry-Pick Branches**: Extract specific conversation branches with full context
 - 📎 **Attachment Handling**: Smart detection of file attachments with timestamp tracking
-- 🔄 **Branch Context**: Includes main branch context when copying thread branches
+- 🔄 **Branch Context**: Includes main branch context when copying branches
 - 🧹 **Smart Filtering**: Automatically skips analysis prompts to avoid recursive bloat
 - 📋 **Clean Markdown**: Copies threads as clean markdown for seamless pasting
 - 💾 **Chat Isolation**: Separate data storage for different AI Studio conversations
@@ -70,8 +70,8 @@ This extension implements a complete "Git-like" workflow for managing chat conve
 
 Since this extension is not on the Chrome Web Store, you can install it manually using Developer Mode.
 
-1. **Download the Code:**
-   - Go to the [Releases page](https://github.com/agentic-ai-humans/google-ai-studio-chat-threads/releases) and download the latest `Source code (zip)` file.
+1. **Download the Code:**  
+   - Go to the [Releases page](https://github.com/agentic-ai-humans/google-ai-studio-chat-branches/releases) and download the latest `Source code (zip)` file.  
    - Unzip the file. You will now have a folder containing the extension files.
 
 2. **Load the Extension in Chrome:**
@@ -80,7 +80,7 @@ Since this extension is not on the Chrome Web Store, you can install it manually
    - Click the **"Load unpacked"** button that appears on the top-left.
    - Select the **`src`** folder from the files you unzipped. **Do not select the entire repository folder, only the `src` subfolder.**
 
-The "Google AI Studio Chat Threads" extension should now appear in your list of extensions and be ready to use.
+The "Google AI Studio Chat Branches" extension should now appear in your list of extensions and be ready to use.
 
 ## How to Use
 
@@ -98,29 +98,32 @@ The "Google AI Studio Chat Threads" extension should now appear in your list of 
 
 #### 2. **Run the Analysis**
 - Press **Send** in the AI Studio chat to run the analysis
-- The AI will analyze your conversation and provide:
-  - **JSON mapping** of message IDs to thread names
-  - **Mermaid Git graph** visualizing conversation branches
-  - **Thread categorization** (e.g., "Extension Debugging", "GitHub Setup", "Feature Requests")
+- The AI will analyze your conversation and provide TWO code blocks:
+  - **Structured JSON (source of truth):**
+    - Shape: `{ "type": "gitGraph", "actions": [ ... ] }`
+    - Actions include commits with exact `turnId`s and `branch_hint`, e.g. `{ type: "commit", id: "turn-…", branch_hint: "Weather in Gdansk" }`
+    - May also include `branch` and `checkout` actions to reflect flow
+  - **Mermaid (visualization only):**
+    - Clean diagram without turnIds; used only for rendering/preview
   
 **💡 Pro Tip**: Copy the generated Mermaid code and paste it into [Mermaid Live Editor](https://mermaid.live) to see your conversation's visual thread structure!
 
-#### 3. **Load Thread Analysis**
-- Click **"2. Load Analysis"** in the extension popup
+#### 3. **Load Branch Analysis**
+- Open the popup. It auto-loads data when analysis finishes, or click **Load Analysis**.
 - The extension will:
-  - Extract the JSON analysis from the AI's response
-  - Handle collapsed expansion panels automatically
-  - Populate the thread dropdown with available threads
+  - Extract JSON + Mermaid from the AI response (works with separate blocks or a combined block)
+  - Save JSON to storage and build the persistent `branch_map` with `{ thread, turnId }` per message
+  - Populate the branch dropdown directly from the JSON actions (no dependency on Mermaid)
   - Show data creation timestamp
 
-#### 4. **Select and Copy Thread**
-- Choose a thread from the **"3. Select a thread to continue:"** dropdown
-- Click **"4. Copy to New Chat"**
+#### 4. **Select and Copy Branch**
+- Choose a branch in the dropdown
+- Click **Copy branch to clipboard**
 - The extension will copy:
-  - **Main branch context**: All messages before the thread started
-  - **Selected thread**: All messages in the chosen thread
+  - **Main branch context**: All messages before the branch point
+  - **Selected branch**: All messages in the chosen branch
   - **Attachment notifications**: Clear instructions for required files
-  - **Thread metadata**: Message counts, branch points, and context info
+  - **Branch metadata**: Message counts, branch points, and context info
 
 #### 5. **Continue in New Chat**
 - Open a new Google AI Studio chat
@@ -128,7 +131,7 @@ The "Google AI Studio Chat Threads" extension should now appear in your list of 
 - Re-upload any required attachments (clearly listed with timestamps)
 - Continue your conversation with full context
 
-### 🌟 **The Magic: Mermaid Thread Visualization**
+### 🌟 **The Magic: Mermaid Branch Visualization**
 
 The extension's killer feature is transforming your chaotic conversation into a beautiful Git-style branch diagram:
 
@@ -170,8 +173,8 @@ gitGraph
 
 #### **How It Works**
 1. **AI Analysis**: The AI identifies thematic clusters in your conversation
-2. **Branch Detection**: Messages are mapped to threads (branches) based on topic similarity
-3. **Git Graph Generation**: Creates a Mermaid diagram showing how discussions evolved and branched
+2. **Branch Detection**: Messages are mapped to branches based on topic similarity
+3. **Git Graph Generation**: Creates a Mermaid diagram showing how discussions evolved and branched (visual-only)
 4. **Visual Navigation**: You can see exactly how ideas developed and where conversations split
 
 This transforms conversation archaeology from "scroll and search" to "visual navigation"!
@@ -198,9 +201,9 @@ Finding your files: Look in your Google AI Studio file manager for files with th
 
 #### **Smart Branch Context**
 Unlike simple filtering, the extension provides **full context** by including:
-- All messages from the main conversation **before** the selected thread branched off
-- All messages from the selected thread
-- Clear labeling of which messages belong to "Main Branch" vs the selected thread
+- All messages from the main conversation **before** the selected branch branched off
+- All messages from the selected branch
+- Clear labeling of which messages belong to "Main Branch" vs the selected branch
 
 #### **Data Management**
 - **Chat Isolation**: Each conversation has separate data storage
@@ -279,12 +282,13 @@ Unlike simple filtering, the extension provides **full context** by including:
 
 ## Version History
 
-### v3.0.0 (Current)
-- Complete Git-like workflow implementation
+### v3.1.0 (Current)
+- Structured JSON gitGraph actions with exact turnIds (source of truth)
+- Mermaid kept clean for visualization
+- Branch dropdown fed from JSON; precise navigation via `{ thread, turnId }`
+- Auto-refresh popup on analysis completion; auto-scroll back to bottom
 - Smart attachment handling with timestamps
-- Branch context preservation
-- Chat isolation and data management
-- Enhanced error handling and logging
+- Chat isolation and improved error handling
 
 ## License
 
@@ -292,7 +296,7 @@ This project is licensed under the **MIT License**. See the `LICENSE` file for d
 
 ## Contributing
 
-Found a bug or have an idea for a new feature? Feel free to [open an issue](https://github.com/agentic-ai-humans/google-ai-studio-chat-threads/issues) in this repository.
+Found a bug or have an idea for a new feature? Feel free to [open an issue](https://github.com/agentic-ai-humans/google-ai-studio-chat-branches/issues) in this repository.
 
 ### Development
 
