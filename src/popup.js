@@ -983,6 +983,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       sendResponse({ status: 'ok' });
+    } else if (request.action === 'analysisCompleted') {
+      // New analysis data is available, reload the popup data
+      console.log('POPUP: Analysis completed, reloading data for chatId:', request.chatId);
+      autoLoadAvailableData();
+      sendResponse({ status: 'ok' });
     }
   });
   }

@@ -1219,6 +1219,9 @@ function watchForAnalysisResponse(scrapedHistory) {
                 console.log("CS: Cleared data_cleared flag for chat:", chatId);
               });
               console.log("CS: Saved enhanced thread map from structured gitGraph JSON.");
+              
+              // Notify popup that new analysis data is available
+              safeSendToPopup({ action: 'analysisCompleted', chatId: chatId });
             }
 
             observer.disconnect();
@@ -1272,6 +1275,9 @@ function watchForAnalysisResponse(scrapedHistory) {
               console.log("CS: Cleared data_cleared flag for chat:", chatId);
             });
             console.log("CS: Saved enhanced thread map from Mermaid fallback.");
+            
+            // Notify popup that new analysis data is available
+            safeSendToPopup({ action: 'analysisCompleted', chatId: chatId });
           }
 
           observer.disconnect();
@@ -1314,6 +1320,9 @@ function watchForAnalysisResponse(scrapedHistory) {
               current_chat_id: chatId
             });
             console.log("CS: Saved enhanced thread map from legacy JSON fallback.");
+            
+            // Notify popup that new analysis data is available
+            safeSendToPopup({ action: 'analysisCompleted', chatId: chatId });
           }
           observer.disconnect();
         } catch (error) {
