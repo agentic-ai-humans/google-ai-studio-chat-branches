@@ -614,6 +614,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function formatBranchOption(branch) {
     const prefix = branch.isMain ? '* ' : '  ';
+    const lastCommit = branch.lastMessage ? 
+      (branch.lastMessage.textContent || branch.lastMessage.richContent || 'Latest message').substring(0, 50) + '...' : 
+      'No messages';
     
     let suffix = '';
     if (branch.isMain) {
@@ -624,7 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
       suffix = ` (${branch.aheadBehind})`;
     }
     
-    return `${prefix}${branch.name}${suffix}`;
+    return `${prefix}${branch.name} / ${lastCommit}${suffix}`;
   }
 
   function populateThreadSelector(threadNames) {
