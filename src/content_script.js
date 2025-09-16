@@ -1237,32 +1237,52 @@ function extractJsonAndMermaidFromDom(turnRoot) {
   try {
     const result = { json: null, mermaid: null };
     const panels = Array.from(turnRoot.querySelectorAll('ms-code-block .mat-expansion-panel'));
-    panels.forEach(panel => {
+    console.log(`CS: Found ${panels.length} expansion panels in ms-code-block elements`);
+    
+    panels.forEach((panel, index) => {
       const titleEl = panel.querySelector('.mat-expansion-panel-header .mat-expansion-panel-header-title');
       const title = titleEl ? titleEl.textContent.trim() : '';
       const codeEl = panel.querySelector('pre code');
-      if (!codeEl) return;
+      if (!codeEl) {
+        console.log(`CS: Panel ${index + 1} has no code element`);
+        return;
+      }
       let code = codeEl.textContent || '';
+      console.log(`CS: Panel ${index + 1} title: "${title}", code length: ${code.length}`);
+      
       // Strip helper markers and zero-width spaces/highlights
       code = code.replace(/IGNORE_WHEN_COPYING_START[\s\S]*?IGNORE_WHEN_COPYING_END/g, '');
       code = code.replace(/\u200B/g, '');
+      
       if (/^JSON$/i.test(title)) {
+        console.log(`CS: Processing JSON panel ${index + 1}`);
         // Find first balanced JSON object
         const json = extractFirstBalancedJson(code);
-        if (json && !result.json) result.json = json;
+        if (json && !result.json) {
+          result.json = json;
+          console.log(`CS: Extracted JSON from panel ${index + 1}, length: ${json.length}`);
+        }
         // If Mermaid is embedded after JSON, capture it
         if (!result.mermaid) {
           const idx = code.indexOf('gitGraph');
           if (idx !== -1) {
             result.mermaid = code.substring(idx).replace(/```/g, '').trim();
+            console.log(`CS: Found embedded Mermaid in JSON panel ${index + 1}`);
           }
         }
       } else if (/^Mermaid$/i.test(title)) {
-        if (!result.mermaid) result.mermaid = code.replace(/```/g, '').trim();
+        console.log(`CS: Processing Mermaid panel ${index + 1}`);
+        if (!result.mermaid) {
+          result.mermaid = code.replace(/```/g, '').trim();
+          console.log(`CS: Extracted Mermaid from panel ${index + 1}, length: ${result.mermaid.length}`);
+        }
       }
     });
+    
+    console.log(`CS: Final extraction result - JSON: ${!!result.json}, Mermaid: ${!!result.mermaid}`);
     return result;
-  } catch (_) {
+  } catch (error) {
+    console.error('CS: Error in extractJsonAndMermaidFromDom:', error);
     return { json: null, mermaid: null };
   }
 }
