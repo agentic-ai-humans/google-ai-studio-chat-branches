@@ -1236,8 +1236,14 @@ function watchForAnalysisResponse(scrapedHistory) {
 function extractJsonAndMermaidFromDom(turnRoot) {
   try {
     const result = { json: null, mermaid: null };
-    const panels = Array.from(turnRoot.querySelectorAll('ms-code-block .mat-expansion-panel'));
+    // First, prefer panels inside ms-code-block
+    let panels = Array.from(turnRoot.querySelectorAll('ms-code-block .mat-expansion-panel'));
     console.log(`CS: Found ${panels.length} expansion panels in ms-code-block elements`);
+    // If none found, fall back to any expansion panel within the turn
+    if (panels.length === 0) {
+      panels = Array.from(turnRoot.querySelectorAll('.mat-expansion-panel'));
+      console.log(`CS: Fallback - Found ${panels.length} expansion panels within the turn`);
+    }
     
     panels.forEach((panel, index) => {
       const titleEl = panel.querySelector('.mat-expansion-panel-header .mat-expansion-panel-header-title');
@@ -1280,6 +1286,29 @@ function extractJsonAndMermaidFromDom(turnRoot) {
     });
     
     console.log(`CS: Final extraction result - JSON: ${!!result.json}, Mermaid: ${!!result.mermaid}`);
+    // Fallback: if still missing, scan raw code blocks directly
+    if (!result.json || !result.mermaid) {
+      const codeBlocks = Array.from(turnRoot.querySelectorAll('pre code'));
+      console.log(`CS: Fallback - scanning ${codeBlocks.length} raw code blocks`);
+      for (let i = 0; i < codeBlocks.length; i++) {
+        const raw = (codeBlocks[i].textContent || '').replace(/\u200B/g, '').replace(/```/g, '').trim();
+        if (!result.json) {
+          const json = extractFirstBalancedJson(raw);
+          if (json) {
+            try { JSON.parse(json); result.json = json; console.log(`CS: Fallback - extracted JSON from raw block ${i+1}`); } catch (_) {}
+          }
+        }
+        if (!result.mermaid && raw.includes('gitGraph')) {
+          const idx = raw.indexOf('gitGraph');
+          if (idx !== -1) {
+            result.mermaid = raw.substring(idx).trim();
+            console.log(`CS: Fallback - extracted Mermaid from raw block ${i+1}`);
+          }
+        }
+        if (result.json && result.mermaid) break;
+      }
+      console.log(`CS: After fallback - JSON: ${!!result.json}, Mermaid: ${!!result.mermaid}`);
+    }
     return result;
   } catch (error) {
     console.error('CS: Error in extractJsonAndMermaidFromDom:', error);
