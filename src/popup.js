@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const analyzeButton = document.getElementById('analyzeButton');
   // loadAnalysisButton removed - analysis now loads automatically
   const threadSelector = document.getElementById('threadSelector');
+  const branchPreview = document.getElementById('branchPreview');
+  const branchPreviewText = document.getElementById('branchPreviewText');
   const openThreadButton = document.getElementById('openThreadButton');
   const goToBranchButton = document.getElementById('goToBranchButton');
   const clearDataButton = document.getElementById('clearDataButton');
@@ -627,6 +629,41 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${prefix}${branch.name}${suffix}`;
   }
 
+  function showBranchPreview(branchName, chatId) {
+    chrome.storage.local.get([`thread_map_${chatId}`, `chat_history_${chatId}`], (result) => {
+      const threadMap = result[`thread_map_${chatId}`];
+      const chatHistory = result[`chat_history_${chatId}`];
+      
+      if (!threadMap || !chatHistory) {
+        branchPreview.classList.add('hidden');
+        return;
+      }
+      
+      // Find the last message in this branch (same logic as goToBranch)
+      let lastMessageInBranch = null;
+      for (let messageNum = Object.keys(threadMap).length; messageNum >= 1; messageNum--) {
+        const threadData = threadMap[messageNum];
+        const threadForMessage = threadData.thread || threadData; // Handle both old and new format
+        
+        if (threadForMessage === branchName) {
+          lastMessageInBranch = chatHistory[messageNum - 1]; // Convert to 0-based index
+          break;
+        }
+      }
+      
+      if (lastMessageInBranch) {
+        // Extract and show preview of the message content
+        const messageContent = lastMessageInBranch.textContent || lastMessageInBranch.richContent || 'No content available';
+        const preview = messageContent.length > 100 ? messageContent.substring(0, 100) + '...' : messageContent;
+        
+        branchPreviewText.textContent = `"${preview}"`;
+        branchPreview.classList.remove('hidden');
+      } else {
+        branchPreview.classList.add('hidden');
+      }
+    });
+  }
+
   function populateThreadSelector(threadNames) {
     console.log('POPULATE THREAD SELECTOR called with:', threadNames);
     threadSelector.innerHTML = ''; // Clear the list
@@ -957,11 +994,18 @@ document.addEventListener('DOMContentLoaded', () => {
       // Get chatId from content script first
       sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
         if (response && response.chatId) {
+          // Save selected branch
           chrome.storage.local.set({ [`selected_branch_${response.chatId}`]: selectedBranch }, () => {
             console.log('Saved selected branch:', selectedBranch);
           });
+          
+          // Show preview of where we'll jump
+          showBranchPreview(selectedBranch, response.chatId);
         }
       });
+    } else {
+      // Hide preview when no branch selected
+      branchPreview.classList.add('hidden');
     }
   });
 
