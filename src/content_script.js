@@ -1881,13 +1881,22 @@ async function goToBranch(threadName) {
   let lastMessageNumber = null;
   
   console.log("CS: === SEARCHING FOR BRANCH ===");
-  // Go through messages from end to start to find the last occurrence of this thread
-  for (let messageNum = Object.keys(threadMap).length; messageNum >= 1; messageNum--) {
+  // Iterate over existing keys only, sorted descending numerically, to avoid undefined gaps
+  const sortedMessageNums = Object.keys(threadMap)
+    .map(k => parseInt(k, 10))
+    .filter(n => !Number.isNaN(n))
+    .sort((a, b) => b - a);
+  for (const messageNum of sortedMessageNums) {
     const threadData = threadMap[messageNum];
+    if (threadData === undefined || threadData === null) {
+      console.warn(`CS: Skipping message ${messageNum} - no thread data`);
+      continue;
+    }
     
     // Handle both old format (string) and new format (object with thread and turnId)
-    const threadForMessage = threadData.thread || threadData; // threadData.thread for new format, threadData for old format
-    const storedTurnId = threadData.turnId || null; // Only available in new format
+    const isObjectFormat = typeof threadData === 'object' && threadData !== null;
+    const threadForMessage = isObjectFormat ? threadData.thread : threadData;
+    const storedTurnId = isObjectFormat ? (threadData.turnId || null) : null; // Only available in new format
     
     console.log(`CS: Message ${messageNum}: Thread="${threadForMessage}", StoredTurnId="${storedTurnId}"`);
     
