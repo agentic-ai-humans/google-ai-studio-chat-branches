@@ -1103,23 +1103,23 @@ async function analyzeAndPrepare() {
 
 === OUTPUT FORMAT (STRICT) ===
 
-Your response MUST be exactly one Mermaid block where EVERY commit id embeds the turnId and branch name.
+Your response MUST be exactly one Mermaid block using PROPER gitGraph syntax.
 
 Rules:
-- For each chat message, add a commit with id formatted as: "turn-XXXX | Branch: <branch name>"
-- You may include optional notes after another pipe, but the first pipe must follow the turnId and the second segment must begin with "Branch: ".
+- Use valid Mermaid gitGraph syntax: commit message: "turn-XXXX | Branch: <name> | <optional notes>"
 - Use branch "Name" and checkout "Name" lines as needed.
-- Do not output any JSON. No prose outside the code block.
+- Do NOT use "commit id:" - that's invalid syntax.
+- Do NOT output any JSON. No prose outside the code block.
 
 Example:
 \`\`\`mermaid
 gitGraph
    branch "Main"
-   commit id: "turn-AAA111 | Branch: Main"
+   commit message: "turn-AAA111 | Branch: Main"
    branch "Weather in Gdansk"
-   commit id: "turn-BBB222 | Branch: Weather in Gdansk"
+   commit message: "turn-BBB222 | Branch: Weather in Gdansk"
    checkout "Main"
-   commit id: "turn-CCC333 | Branch: Main"
+   commit message: "turn-CCC333 | Branch: Main"
 \`\`\`
 
 === CHAT HISTORY TO ANALYZE ===
@@ -1156,16 +1156,16 @@ function watchForAnalysisResponse(scrapedHistory) {
 
       if (mermaidString) {
         try {
-          // Parse turnId and branch from commit ids: "turn-XXXX | Branch: Name"
+          // Parse turnId and branch from commit messages: "turn-XXXX | Branch: Name"
           const enhancedThreadMap = {};
           const lines = mermaidString.split(/\r?\n/);
           for (const line of lines) {
-            const commitMatch = line.match(/commit\s+id:\s*"([^"]+)"/);
+            const commitMatch = line.match(/commit\s+message:\s*"([^"]+)"/);
             if (!commitMatch) continue;
-            const idText = commitMatch[1];
-            const idParts = idText.split('|').map(s => s.trim());
-            const turnIdPart = idParts[0];
-            const branchPart = idParts.find(p => p.toLowerCase().startsWith('branch:')) || '';
+            const messageText = commitMatch[1];
+            const messageParts = messageText.split('|').map(s => s.trim());
+            const turnIdPart = messageParts[0];
+            const branchPart = messageParts.find(p => p.toLowerCase().startsWith('branch:')) || '';
             const turnId = turnIdPart && turnIdPart.startsWith('turn-') ? turnIdPart : null;
             const branchName = branchPart ? branchPart.replace(/^[Bb]ranch:\s*/, '') : null;
             if (!turnId || !branchName) continue;
