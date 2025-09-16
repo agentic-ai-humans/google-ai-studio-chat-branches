@@ -1293,12 +1293,13 @@ function extractJsonAndMermaidFromDom(turnRoot) {
           result.json = json;
           console.log(`CS: Extracted JSON from panel ${index + 1}, length: ${json.length}`);
         }
-        // If Mermaid is embedded after JSON, capture it
-        if (!result.mermaid) {
+        // Only look for embedded Mermaid if this is a combined block (has both JSON and Mermaid)
+        // Check if the code contains both JSON structure AND gitGraph command (not just JSON with "gitGraph" string)
+        if (!result.mermaid && code.includes('gitGraph') && code.includes('commit message:')) {
           const idx = code.indexOf('gitGraph');
           if (idx !== -1) {
             result.mermaid = code.substring(idx).replace(/```/g, '').trim();
-            console.log(`CS: Found embedded Mermaid in JSON panel ${index + 1}`);
+            console.log(`CS: Found embedded Mermaid in combined JSON panel ${index + 1}`);
           }
         }
       } else if (/^Mermaid$/i.test(title)) {
