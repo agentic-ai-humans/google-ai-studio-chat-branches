@@ -62,8 +62,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function hideProgressIndicator() {
     analysisInProgress = false;
-    progressIndicator.classList.add('hidden');
-    mainControls.classList.remove('hidden');
+    if (progressIndicator) {
+      progressIndicator.classList.add('hidden');
+    }
+    if (mainControls) {
+      mainControls.classList.remove('hidden');
+    }
   }
 
   function updateProgressCounter(count) {
@@ -132,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('execCommand copy failed');
       }
     } catch (err) {
-      console.error('Fallback copy failed:', err);
       // Show manual copy dialog as last resort
       showManualCopyDialog(text, type);
     }
@@ -246,10 +249,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       
-      activeTabId = tabs[0].id;
-      console.log('Active tab ID:', activeTabId, 'URL:', tabs[0].url);
+      const firstTab = tabs[0];
+      if (!firstTab) {
+        showIncorrectDomain();
+        return;
+      }
       
-      const isCorrectPage = tabs[0].url && tabs[0].url.includes("aistudio.google.com");
+      activeTabId = firstTab.id;
+      const isCorrectPage = firstTab.url && firstTab.url.includes("aistudio.google.com");
       if (!isCorrectPage) {
         showIncorrectDomain();
         return;
