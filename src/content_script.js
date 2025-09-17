@@ -302,12 +302,7 @@ function htmlToMarkdown(html) {
             .trim();
         
     } catch (error) {
-            error: error.message,
-            htmlLength: html ? html.length : 0,
-            htmlPreview: html ? html.substring(0, 200) + '...' : 'null'
-        });
-        
-        // Explicit fallback with warning - user should know markdown conversion failed
+        // Fallback: use HTML cleaning if markdown conversion fails
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
         let cleanedHtml = tempDiv.innerHTML
@@ -860,17 +855,6 @@ function checkIfAtBottomOfChat() {
   
   const isAtBottom = isLastMessageVisible && isNearBottom;
   
-    isLastMessageVisible,
-    isNearBottom,
-    isAtBottom,
-    lastMessageRect: rect,
-    scrollInfo: {
-      scrollTop,
-      scrollHeight,
-      clientHeight,
-      distanceFromBottom: scrollHeight - (scrollTop + clientHeight)
-    }
-  });
   
   return { 
     isAtBottom, 
@@ -1201,12 +1185,6 @@ function watchForAnalysisResponse(scrapedHistory) {
                     const turnId = String(action.id);
                     const branchName = String(action.branch_hint || action.branch || '').trim();
                     if (!branchName) {
-                        actionId: action.id,
-                        actionType: action.type,
-                        branchHint: action.branch_hint,
-                        branch: action.branch,
-                        fullAction: action
-                      });
                       return;
                     }
                     const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
@@ -1369,6 +1347,7 @@ async function loadAnalysis(showAlerts = true) {
   // DOM-first extraction from the last model turn
   const domExtract = extractJsonAndMermaidFromDom(lastModelTurn);
   const chatId = getCurrentChatId();
+  if (!chatId) { return; }
   const storageData = { current_chat_id: chatId };
   let enhancedBranchMap = {};
 
@@ -1378,14 +1357,9 @@ async function loadAnalysis(showAlerts = true) {
       const stored = await chrome.storage.local.get([`chat_history_${chatId}`]);
       const chatHistory = stored[`chat_history_${chatId}`];
       
-      if (!chatHistory || !Array.isArray(chatHistory)) {
-          chatId,
-          chatHistoryExists: !!chatHistory,
-          chatHistoryType: typeof chatHistory,
-          storageKeys: Object.keys(stored)
-        });
-        return { hasJsonData: false, hasMermaidData: false };
-      }
+        if (!chatHistory || !Array.isArray(chatHistory)) {
+          return { hasJsonData: false, hasMermaidData: false };
+        }
       const gitGraph = JSON.parse(domExtract.json);
       if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
         gitGraph.actions.forEach(action => {
@@ -1393,12 +1367,6 @@ async function loadAnalysis(showAlerts = true) {
             const turnId = String(action.id);
             const branchName = String(action.branch_hint || action.branch || '').trim();
             if (!branchName) {
-                actionId: action.id,
-                actionType: action.type,
-                branchHint: action.branch_hint,
-                branch: action.branch,
-                fullAction: action
-              });
               return;
             }
             const idx = chatHistory.findIndex(m => m.turnId === turnId);
@@ -1447,20 +1415,12 @@ async function openFilteredBranch(branchName) {
   
   // FAIL FAST: Validate required data exists
   if (!chatHistory || !Array.isArray(chatHistory)) {
-      chatId,
-      chatHistoryExists: !!chatHistory,
-      chatHistoryType: typeof chatHistory,
-      chatHistoryLength: chatHistory ? chatHistory.length : 'N/A'
-    });
+    
     return;
   }
   
   if (!branchMap || typeof branchMap !== 'object') {
-      chatId,
-      branchMapExists: !!branchMap,
-      branchMapType: typeof branchMap,
-      branchMapKeys: branchMap ? Object.keys(branchMap).length : 'N/A'
-    });
+    
     return;
   }
   
@@ -1469,11 +1429,7 @@ async function openFilteredBranch(branchName) {
     
     // FAIL FAST: Validate thread data structure
     if (messageThreadData && typeof messageThreadData !== 'object') {
-        messageId: message.id,
-        threadDataType: typeof messageThreadData,
-        threadData: messageThreadData,
-        expectedFormat: '{ thread: "...", turnId: "..." }'
-      });
+      
       return false;
     }
     
@@ -1481,9 +1437,7 @@ async function openFilteredBranch(branchName) {
     const messageThread = messageThreadData ? messageThreadData.thread : null;
     
     if (messageThreadData && !messageThread) {
-        messageId: message.id,
-        threadData: messageThreadData
-      });
+      
     }
     
     return messageThread === branchName;
@@ -1492,12 +1446,7 @@ async function openFilteredBranch(branchName) {
   
   // FAIL FAST: Validate we found messages for this branch
   if (threadMessages.length === 0) {
-      branchName,
-      chatId,
-      totalChatHistory: chatHistory.length,
-      branchMapKeys: Object.keys(branchMap),
-      availableBranches: Object.values(branchMap).map(data => data.thread).filter((v, i, a) => a.indexOf(v) === i)
-    });
+    
     return;
   }
   
@@ -1523,14 +1472,7 @@ async function openFilteredBranch(branchName) {
   
   // FAIL FAST: This should never happen if we have thread messages
   if (contextMessages.length === 0) {
-      branchName,
-      threadMessagesLength: threadMessages.length,
-      branchPoint,
-      mainBranchCount,
-      chatHistoryLength: chatHistory.length,
-      threadMessageIds: threadMessages.map(m => m.id),
-      allMessageIds: chatHistory.map(m => m.id)
-    });
+    
     return;
   }
 
@@ -1739,22 +1681,12 @@ async function goToBranch(branchName) {
   
   // FAIL FAST: Validate required data exists
   if (!chatHistory || !Array.isArray(chatHistory)) {
-      chatId,
-      branchName,
-      chatHistoryExists: !!chatHistory,
-      chatHistoryType: typeof chatHistory,
-      storageKeys: Object.keys(data)
-    });
+    
     return;
   }
   
   if (!branchMap || typeof branchMap !== 'object') {
-      chatId,
-      branchName,
-      branchMapExists: !!branchMap,
-      branchMapType: typeof branchMap,
-      storageKeys: Object.keys(data)
-    });
+    
     return;
   }
   
@@ -1797,13 +1729,7 @@ async function goToBranch(branchName) {
   }
   
   if (!lastMessageInThread) {
-      branchName,
-      chatId,
-      branchMapSize: Object.keys(branchMap).length,
-      availableBranches: Object.values(branchMap).map(data => data.thread).filter((v, i, a) => a.indexOf(v) === i),
-      branchMapSample: Object.entries(branchMap).slice(0, 3),
-      searchedMessageNums: sortedMessageNums.slice(0, 10)
-    });
+    
     return;
   }
   
@@ -1828,13 +1754,7 @@ async function goToBranch(branchName) {
   }
   
   if (!lastTurnId) {
-      branchName,
-      chatId,
-      lastMessageNumber,
-      lastMessageContent: lastMessageInThread ? (lastMessageInThread.textContent || '').substring(0, 100) + '...' : 'No content',
-      turnIdFromStorage: lastMessageInThread ? lastMessageInThread.turnId : 'N/A',
-      allTurnsOnPage: document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn').length
-    });
+    
     return;
   }
   
@@ -1867,14 +1787,7 @@ async function goToBranch(branchName) {
     }, 2000);
     
   } else {
-      branchName,
-      chatId,
-      targetTurnId: lastTurnId,
-      lastMessageNumber,
-      pageSelector: pageConfig.turnSelector,
-      totalTurnsOnPage: document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn').length,
-      availableTurnIds: Array.from(document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn')).map(t => t.id).slice(0, 10)
-    });
+    
   }
   
 }

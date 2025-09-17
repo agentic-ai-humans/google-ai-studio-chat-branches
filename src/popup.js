@@ -29,31 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const copyMermaidButton = document.getElementById('copyMermaidButton');
   const showGraphButton = document.getElementById('showGraphButton');
 
-  // Debug: Check if elements are found
-    mainView: !!mainView,
-    mainTitle: !!mainTitle,
-    progressIndicator: !!progressIndicator,
-    progressCounter: !!progressCounter,
-    scrollProgress: !!scrollProgress,
-    scrollCounter: !!scrollCounter,
-    messageProgress: !!messageProgress,
-    cancelAnalysisButton: !!cancelAnalysisButton,
-    mainControls: !!mainControls,
-    filteringView: !!filteringView,
-    incorrectDomainView: !!incorrectDomainView,
-    scrollToBottomButton: !!scrollToBottomButton,
-    analyzeButton: !!analyzeButton,
-    goToBranchButton: !!goToBranchButton,
-    branchSelector: !!branchSelector,
-    openBranchButton: !!openBranchButton,
-    clearDataButton: !!clearDataButton,
-    dataTimestamp: !!dataTimestamp,
-    mermaidSection: !!mermaidSection,
-    dataManagementSection: !!dataManagementSection,
-    showGraphButton: !!showGraphButton,
-    copyJsonButton: !!copyJsonButton,
-    copyMermaidButton: !!copyMermaidButton
-  });
 
   let activeTabId = null;
   let analysisInProgress = false;
@@ -75,17 +50,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!mainControls) {
       return;
     }
-    
     progressIndicator.classList.remove('hidden');
     mainControls.classList.add('hidden');
-    
     
     // Reset progress displays
     if (progressCounter) progressCounter.textContent = '0';
     if (scrollCounter) scrollCounter.textContent = '0/0';
     if (scrollProgress) scrollProgress.classList.add('hidden');  // Start with scroll progress hidden
     if (messageProgress) messageProgress.classList.remove('hidden');  // Show message progress initially
-    
   }
 
   function hideProgressIndicator() {
@@ -160,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('execCommand copy failed');
       }
     } catch (err) {
+      console.error('Fallback copy failed:', err);
       // Show manual copy dialog as last resort
       showManualCopyDialog(text, type);
     }
@@ -247,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Główna funkcja inicjująca ---
   function initializePopup() {
+    console.log('Initializing popup...');
     
     // Try multiple methods to get the active tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -258,11 +232,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const aiStudioTab = allTabs.find(tab => tab.url && tab.url.includes("aistudio.google.com"));
             if (aiStudioTab) {
               activeTabId = aiStudioTab.id;
+              console.log('Using AI Studio tab ID:', activeTabId, 'URL:', aiStudioTab.url);
               initializeForCorrectPage();
             } else {
+              console.error('No AI Studio tabs found');
               showIncorrectDomain();
             }
           } else {
+            console.error('No tabs found at all');
             showIncorrectDomain();
           }
         });
@@ -270,6 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       activeTabId = tabs[0].id;
+      console.log('Active tab ID:', activeTabId, 'URL:', tabs[0].url);
       
       const isCorrectPage = tabs[0].url && tabs[0].url.includes("aistudio.google.com");
       if (!isCorrectPage) {
@@ -287,21 +265,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function initializeForCorrectPage() {
+      console.log('Popup: Checking current chat info...');
       // Get current chat info from content script
       sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
         if (response) {
+          console.log('Popup: Response from content script:', response);
           
           // Handle pages that are not actual chats (no real chat ID)
           if (response.isNewChat || !response.chatId) {
+            console.log('Popup: Not on a valid chat page - showing incorrect domain view');
             showIncorrectDomain();
             return;
           }
           
+          console.log('Popup: Current chat ID:', response.chatId);
+          console.log('Popup: Has analysis:', response.hasAnalysis);
           
           // AUTO-LOAD: Check for available data and load it automatically
           autoLoadAvailableData(response.chatId, response);
           
         } else {
+          console.log('Popup: Could not get current chat info');
         }
       });
     }
@@ -370,7 +354,11 @@ document.addEventListener('DOMContentLoaded', () => {
       extractedJsonData = storageData[keys.jsonData] || null;
       extractedMermaidData = storageData[keys.mermaidDiagram] || null;
       
+      console.log('POPUP: Loading data from storage for chatId:', chatId);
+      console.log('POPUP: JSON data available:', !!extractedJsonData);
+      console.log('POPUP: Mermaid data available:', !!extractedMermaidData);
       if (extractedMermaidData) {
+        console.log('POPUP: Mermaid data preview:', extractedMermaidData.substring(0, 100) + '...');
       }
 
       let branchNames = [];
@@ -390,6 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
             branchNames = Array.from(names).filter(n => n && n.toLowerCase() !== 'gitgraph');
           }
         } catch (e) {
+          console.error('Failed to parse structured JSON for branch list:', e);
         }
       }
 
@@ -584,9 +573,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Restore previously selected branch
             if (savedBranch && branchNames.includes(savedBranch)) {
               branchSelector.value = savedBranch;
+              console.log('Restored selected branch:', savedBranch);
             }
           } else {
             // FAIL FAST: Don't silently degrade functionality
+            console.error('CRITICAL ERROR: Branch data missing!', {
               hasBranchNames: branchNames.length > 0,
               hasBranchMap: !!branchMap,
               hasChatHistory: !!chatHistory,
@@ -601,6 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
             errorOption.style.color = '#e74c3c';
             branchSelector.appendChild(errorOption);
             
+            console.error('Branch selector degraded to error state - Go to Branch will not work');
           }
         });
       }
@@ -610,23 +602,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Helper function to safely send messages to content script
   function sendMessageToContentScript(message, callback) {
     if (!activeTabId) {
+      console.error('No active tab ID available');
+      console.error('No AI Studio tab found');
       return;
     }
     
     // First check if the tab is still valid
     chrome.tabs.get(activeTabId, (tab) => {
       if (chrome.runtime.lastError) {
+        console.error('Tab no longer exists:', chrome.runtime.lastError);
+        console.error('AI Studio tab was closed');
         return;
       }
       
       // Check if it's still an AI Studio tab
       if (!tab.url || !tab.url.includes("aistudio.google.com")) {
+        console.error('Not on AI Studio chat page');
         return;
       }
       
       // Send the message
       chrome.tabs.sendMessage(activeTabId, message, (response) => {
         if (chrome.runtime.lastError) {
+          console.error('Error sending message to content script:', chrome.runtime.lastError.message || chrome.runtime.lastError);
+          console.error('Content script not loaded');
           return;
         }
         if (callback) callback(response);
@@ -640,11 +639,13 @@ document.addEventListener('DOMContentLoaded', () => {
     sendMessageToContentScript({ action: 'scrollToBottom' }, (response) => {
       if (response && response.status === 'ok') {
         // Don't close popup, let user see the scroll happened and then analyze
+        console.log('Scrolled to bottom successfully');
       }
     });
   });
 
   analyzeButton.addEventListener('click', (event) => {
+    console.log('=== ANALYZE BUTTON CLICKED ===');
     
     // Prevent default behavior and event bubbling
     event.preventDefault();
@@ -652,9 +653,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Prevent multiple simultaneous analyses
     if (analysisInProgress) {
+      console.log('Analysis already in progress, ignoring click');
       return;
     }
     
+    console.log('Starting analysis...');
     
     // Get current chat info first, then clear only that chat's data
     sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
@@ -677,15 +680,18 @@ document.addEventListener('DOMContentLoaded', () => {
         mermaidSection.classList.add('hidden');
         
         // Close the popup and start analysis
+        console.log('Closing popup and starting analysis...');
         
         // Start analysis with progress tracking
         sendMessageToContentScript({ action: 'analyzeAndPrepare' }, (analysisResponse) => {
+          console.log('Analysis completed successfully');
           // Analysis complete - user can reopen popup to see results
         });
         
         // Close the popup after starting the analysis
         window.close();
       } else {
+        console.log('Not on a valid AI Studio chat page');
       }
     });
   });
@@ -702,15 +708,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (extractedJsonData) {
       copyToClipboard(extractedJsonData, 'json');
     } else {
+      console.log('No JSON data available to copy');
     }
   });
 
   copyMermaidButton.addEventListener('click', () => {
+    console.log('POPUP: Copy Mermaid clicked');
     const mermaidToCopy = getMermaidContent();
     
     if (mermaidToCopy) {
       copyToClipboard(mermaidToCopy, 'mermaid');
     } else {
+      console.log('No Mermaid diagram available to copy');
     }
   });
 
@@ -718,11 +727,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function getMermaidContent() {
     // Priority 1: Direct stored Mermaid data (most reliable)
     if (extractedMermaidData && extractedMermaidData.trim()) {
+      console.log('POPUP: Using stored Mermaid data');
       return extractedMermaidData.trim();
     }
     
     // No text-based fallbacks - only use DOM-extracted data from content script
     
+    console.log('POPUP: No Mermaid content available');
     return null;
   }
 
@@ -754,22 +765,27 @@ document.addEventListener('DOMContentLoaded', () => {
       // Step 5: Construct the Mermaid Live URL
       return `https://mermaid.live/edit#pako:${base64Url}`;
     } catch (error) {
+      console.error('Error creating Mermaid Live URL:', error);
       throw error;
     }
   }
 
   showGraphButton.addEventListener('click', () => {
+    console.log('POPUP: Show Graph clicked');
     const mermaidToShow = getMermaidContent();
     
     if (!mermaidToShow) {
+      console.log('No Mermaid diagram available to show');
       return;
     }
     
     try {
       // Create proper mermaid.live URL using pako compression
       const url = createMermaidLiveURL(mermaidToShow);
+      console.log('POPUP: Opening mermaid.live with pako-compressed data');
       chrome.tabs.create({ url });
     } catch (err) {
+      console.warn('Failed to open mermaid.live with pako compression. Falling back to clipboard.');
       chrome.tabs.create({ url: 'https://mermaid.live/edit' });
       copyToClipboard(mermaidToShow, 'mermaid');
     }
@@ -794,6 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedBranch = branchSelector.value;
     if (selectedBranch) {
       sendMessageToContentScript({ action: 'openBranchInNewChat', branchName: selectedBranch }, () => {
+        console.log('Branch copied to clipboard successfully');
         // DON'T delete data - user might want to copy other branches or use Go to Branch
         // Data should persist until user manually clears it or runs new analysis
         
@@ -806,19 +823,26 @@ document.addEventListener('DOMContentLoaded', () => {
   goToBranchButton.addEventListener('click', () => {
     const selectedBranch = branchSelector.value;
     if (selectedBranch) {
+      console.log('=== GO TO BRANCH CLICKED ===');
+      console.log('Selected branch:', selectedBranch);
+      console.log('Sending goToBranch message to content script...');
       sendMessageToContentScript({ action: 'goToBranch', branchName: selectedBranch }, (response) => {
+        console.log('Branch navigation response:', response);
         // Close popup after successful navigation
         window.close();
       });
     } else {
+      console.log('No branch selected for branch navigation');
     }
   });
 
   // Function to clear data
   function clearAllData() {
+    console.log('Clear data function called');
     // Get current chat info to clear only that chat's data
     sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
       if (response && response.chatId) {
+        console.log('Current chat ID:', response.chatId);
         if (confirm('Are you sure you want to clear all analysis data for this chat?')) {
           chrome.storage.local.remove([
             `chat_history_${response.chatId}`, 
@@ -832,6 +856,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ], () => {
             // Set a flag to prevent auto-reloading from page after manual clear
             chrome.storage.local.set({ [`data_cleared_${response.chatId}`]: Date.now() }, () => {
+              console.log('Data cleared flag set for chat:', response.chatId);
             });
           });
           
@@ -846,8 +871,10 @@ document.addEventListener('DOMContentLoaded', () => {
           // Clear extracted data variables
           extractedJsonData = null;
           extractedMermaidData = null;
+          console.log('Analysis data cleared successfully');
         }
       } else {
+        console.log('No data to clear for this chat');
       }
     });
   }
@@ -862,6 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
         if (response && response.chatId) {
           chrome.storage.local.set({ [`selected_branch_${response.chatId}`]: selectedBranch }, () => {
+            console.log('Saved selected branch:', selectedBranch);
           });
         }
       });
@@ -885,6 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sendResponse({ status: 'ok' });
     } else if (request.action === 'analysisCompleted') {
       // New analysis data is available, reload the popup data
+      console.log('POPUP: Analysis completed, reloading data for chatId:', request.chatId);
       autoLoadAvailableData(request.chatId, { chatId: request.chatId, hasAnalysis: true });
       sendResponse({ status: 'ok' });
     }
