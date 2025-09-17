@@ -1145,58 +1145,67 @@ SECOND CODE BLOCK - MERMAID gitGraph (no turnIds in Mermaid), example:
 gitGraph
     commit id: "Initial Context"
     commit id: "Framework Understood"
+
     branch "Paradigm Shifts"
+    checkout "Paradigm Shifts"
     commit id: "3 Major Shifts Proposed"
     commit id: "Shifts Analyzed"
-    checkout main
+    checkout "main"
     merge "Paradigm Shifts"
     
     branch "TOFU Strategy"
+    checkout "TOFU Strategy"
     commit id: "GAIO Plan"
     commit id: "Adapting GAIO"
     
     branch "Service Ladder"
+    checkout "Service Ladder"
     commit id: "Program Proposed"
     commit id: "Ladder Validated"
     checkout "TOFU Strategy"
     commit id: "Platform Mapping"
     merge "Service Ladder"
     
-    checkout main
+    checkout "main"
     merge "TOFU Strategy"
     
     branch "Cursor Analysis"
+    checkout "Cursor Analysis"
     commit id: "Initial Question"
     commit id: "Tornado Test on Cursor"
     
     branch "Marketing IDE Idea"
+    checkout "Marketing IDE Idea"
     commit id: "Cursor for Marketing?"
     commit id: "Slack-First Strategy"
     commit id: "Platform Risk Raised"
     commit id: "Mattermost as OS Base"
     commit id: "Ecosystem Check"
-    checkout "Cursor Analysis"
+
     branch "Hacking Cursor"
+    checkout "Hacking Cursor"
     commit id: "Using Cursor as Engine"
     checkout "Marketing IDE Idea"
-    merge "Hacking Cursor" id: "Headless IDE Synthesis"
+    merge "Hacking Cursor"
     commit id: "API Feasibility Check"
     
     branch "Open Source Engine"
+    checkout "Open Source Engine"
     commit id: "Quest for OSS Alt"
     commit id: "Continue.dev Identified"
     commit id: "Feasibility Check"
     checkout "Marketing IDE Idea"
-    merge "Open Source Engine" id: "Final Tech Stack"
+    merge "Open Source Engine"
     
-    checkout main
+    checkout "main"
     merge "Marketing IDE Idea"
     
     branch "Internal OS Structure"
+    checkout "Internal OS Structure"
     commit id: "Applying IDE Internally"
     commit id: "Customer-Centric Structure"
     
-    checkout main
+    checkout "main"
     merge "Internal OS Structure"
     commit id: "Final Output"
 

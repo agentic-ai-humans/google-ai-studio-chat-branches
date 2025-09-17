@@ -866,6 +866,39 @@ document.addEventListener('DOMContentLoaded', () => {
     return mermaid.startsWith('gitGraph') ? mermaid : null;
   }
 
+  // Create proper mermaid.live URL using pako compression
+  function createMermaidLiveURL(mermaidCode) {
+    try {
+      // Step 1: Wrap the Mermaid code into a JSON payload
+      const payload = {
+        code: mermaidCode,
+        mermaid: {
+          theme: 'default'
+        }
+      };
+
+      // Step 2: Convert the JSON object to a UTF-8 encoded string
+      const jsonString = JSON.stringify(payload);
+
+      // Step 3: Compress the UTF-8 string using zlib (Pako)
+      const compressed = pako.deflate(jsonString, { level: 9 });
+
+      // Step 4: Base64-URL encode the compressed data
+      // Convert Uint8Array to string for btoa
+      const binaryString = String.fromCharCode.apply(null, compressed);
+      const base64 = btoa(binaryString);
+      
+      // Make it URL-safe: replace + with -, / with _, and remove padding
+      const base64Url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      // Step 5: Construct the Mermaid Live URL
+      return `https://mermaid.live/edit#pako:${base64Url}`;
+    } catch (error) {
+      console.error('Error creating Mermaid Live URL:', error);
+      throw error;
+    }
+  }
+
   showGraphButton.addEventListener('click', () => {
     console.log('POPUP: Show Graph clicked');
     // Prefer stored mermaid; fallback to extracting from JSON blob if combined
@@ -880,13 +913,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     try {
-      // Always send plain Mermaid code (no JSON config) to mermaid.live
-      const simpleBase64 = btoa(mermaidToShow.trim());
-      const url = `https://mermaid.live/edit#base64:${simpleBase64}`;
-      console.log('POPUP: Opening mermaid.live with base64 data');
+      // Create proper mermaid.live URL using pako compression
+      const url = createMermaidLiveURL(mermaidToShow.trim());
+      console.log('POPUP: Opening mermaid.live with pako-compressed data');
       chrome.tabs.create({ url });
     } catch (err) {
-      console.warn('Failed to open mermaid.live with base64 code. Falling back to clipboard.');
+      console.warn('Failed to open mermaid.live with pako compression. Falling back to clipboard.');
       chrome.tabs.create({ url: 'https://mermaid.live/edit' });
       copyToClipboard(mermaidToShow, 'mermaid');
     }
