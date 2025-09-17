@@ -132,65 +132,8 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Analysis cancelled by user');
   }
 
-  // --- Mermaid/JSON Extraction Functions ---
-  function extractJsonAndMermaid(combinedContent) {
-    try {
-      // Split the content to find JSON and Mermaid sections
-      const lines = combinedContent.split('\n');
-      let jsonContent = '';
-      let mermaidContent = '';
-      let currentSection = 'none';
-      let braceCount = 0;
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        
-        // Detect start of JSON
-        if (line.trim().startsWith('{') && currentSection === 'none') {
-          currentSection = 'json';
-          jsonContent += line + '\n';
-          braceCount = (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
-          continue;
-        }
-        
-        // Continue JSON section
-        if (currentSection === 'json') {
-          jsonContent += line + '\n';
-          braceCount += (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
-          
-          // End of JSON when braces are balanced
-          if (braceCount === 0 && line.trim().endsWith('}')) {
-            currentSection = 'none';
-            continue;
-          }
-        }
-        
-        // Detect start of Mermaid
-        if (line.trim() === 'mermaid' || line.trim() === '```mermaid') {
-          currentSection = 'mermaid';
-          continue;
-        }
-        
-        // Continue Mermaid section
-        if (currentSection === 'mermaid') {
-          // End of Mermaid
-          if (line.trim() === '```' || line.trim() === '') {
-            currentSection = 'none';
-            continue;
-          }
-          mermaidContent += line + '\n';
-        }
-      }
-      
-      return {
-        json: jsonContent.trim(),
-        mermaid: mermaidContent.trim()
-      };
-    } catch (error) {
-      console.error('Error extracting JSON and Mermaid:', error);
-      return { json: '', mermaid: '' };
-    }
-  }
+  // --- Data extraction is handled by content script only ---
+  // All JSON/Mermaid extraction uses extractJsonAndMermaidFromDom() in content_script.js
 
   function copyToClipboard(text, type) {
     // Try modern clipboard API first
@@ -428,9 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
           loadDataFromStorage(storageData, chatId);
         }
         
-        // Only check page for fresh data if user hasn't recently cleared data AND we don't already have data
+        // CRITICAL: Only extract from page if NO storage data exists at all
         if (!dataWasCleared && !hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
-          console.log('AUTO-LOAD: Checking page for fresh data...');
+          console.log('AUTO-LOAD: No stored data found, checking page for fresh data...');
           sendMessageToContentScript({ action: 'loadAnalysis' }, (pageResult) => {
             console.log('AUTO-LOAD: Page result:', pageResult);
             if (pageResult && (pageResult.hasJsonData || pageResult.hasMermaidData)) {
@@ -449,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (dataWasCleared) {
             console.log('AUTO-LOAD: Skipping page check - data was recently cleared by user');
           } else {
-            console.log('AUTO-LOAD: Skipping page check - already have stored data');
+            console.log('AUTO-LOAD: PRESERVING stored data - NOT re-extracting from page');
           }
           
           if (!hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
@@ -469,9 +412,19 @@ document.addEventListener('DOMContentLoaded', () => {
       extractedJsonData = storageData[keys.jsonData] || null;
       extractedMermaidData = storageData[keys.mermaidDiagram] || null;
       
-      console.log('POPUP: Loading data from storage for chatId:', chatId);
-      console.log('POPUP: JSON data available:', !!extractedJsonData);
-      console.log('POPUP: Mermaid data available:', !!extractedMermaidData);
+      console.log('🔍 POPUP: Loading data from storage for chatId:', chatId);
+      console.log('🔍 POPUP: Storage keys being accessed:', {
+        jsonDataKey: keys.jsonData,
+        mermaidDiagramKey: keys.mermaidDiagram,
+        branchMapKey: keys.branchMap,
+        chatHistoryKey: keys.chatHistory
+      });
+      console.log('🔍 POPUP: Available storage keys:', Object.keys(storageData));
+      console.log('🔍 POPUP: JSON data available:', !!extractedJsonData);
+      console.log('🔍 POPUP: Mermaid data available:', !!extractedMermaidData);
+      if (extractedJsonData) {
+        console.log('🔍 POPUP: JSON data preview:', extractedJsonData.substring(0, 100) + '...');
+      }
       if (extractedMermaidData) {
         console.log('POPUP: Mermaid data preview:', extractedMermaidData.substring(0, 100) + '...');
       }
@@ -480,21 +433,35 @@ document.addEventListener('DOMContentLoaded', () => {
       if (extractedJsonData) {
         try {
           const json = JSON.parse(extractedJsonData);
+          console.log('🔍 POPUP: Parsed JSON structure:', {
+            hasType: !!json.type,
+            type: json.type,
+            hasActions: !!json.actions,
+            actionsLength: json.actions ? json.actions.length : 0
+          });
+          
           if (json && json.type === 'gitGraph' && Array.isArray(json.actions)) {
             const names = new Set();
             json.actions.forEach(action => {
               if (action && action.type === 'commit' && action.branch_hint) {
                 names.add(String(action.branch_hint).trim());
+                console.log('🔍 POPUP: Found branch from commit:', action.branch_hint);
               }
               if (action && action.type === 'branch' && action.name) {
                 names.add(String(action.name).trim());
+                console.log('🔍 POPUP: Found branch from branch action:', action.name);
               }
             });
             branchNames = Array.from(names).filter(n => n && n.toLowerCase() !== 'gitgraph');
+            console.log('🔍 POPUP: Final branch names extracted:', branchNames);
+          } else {
+            console.error('🔍 POPUP: Invalid JSON structure for branch extraction');
           }
         } catch (e) {
           console.error('Failed to parse structured JSON for branch list:', e);
         }
+      } else {
+        console.log('🔍 POPUP: No extractedJsonData available for branch extraction');
       }
 
       if (branchNames.length > 0) {
@@ -678,7 +645,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function populateBranchSelector(branchNames) {
-    console.log('POPULATE BRANCH SELECTOR called with:', branchNames);
+    console.log('🔍 POPULATE BRANCH SELECTOR called with:', branchNames);
+    console.log('🔍 POPUP: Branch names count:', branchNames.length);
     branchSelector.innerHTML = ''; // Clear the list
 
     // Add default option
@@ -695,6 +663,17 @@ document.addEventListener('DOMContentLoaded', () => {
           const branchMap = result[keys.branchMap];
           const chatHistory = result[keys.chatHistory];
           const savedBranch = result[keys.selectedBranch];
+          
+          console.log('🔍 POPUP: populateBranchSelector storage result:', {
+            branchMapExists: !!branchMap,
+            branchMapType: typeof branchMap,
+            branchMapSize: branchMap ? Object.keys(branchMap).length : 0,
+            chatHistoryExists: !!chatHistory,
+            chatHistoryType: typeof chatHistory,
+            chatHistoryLength: chatHistory ? chatHistory.length : 0,
+            savedBranch,
+            allStorageKeys: Object.keys(result)
+          });
           
           if (branchMap && chatHistory) {
             console.log('USING GIT-STYLE SORTING with branch map and chat history');
