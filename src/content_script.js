@@ -419,19 +419,15 @@ function extractTurnContent(turnElement, userMessages, timeout = 3000) {
                 const textContent = contentNode ? contentNode.innerText.trim() : "";
                 const richContent = contentNode ? contentNode.innerHTML.trim() : "";
                 
-                // Log the actual HTML content to see what we're working with
-                console.log(`CS: Raw HTML content preview: "${richContent.substring(0, 200)}..."`);
                 
                 // Since no markdown is stored in data attributes, convert HTML to markdown
                 // This gives us clean, readable formatting for analysis and exports
                 let markdownContent = htmlToMarkdown(richContent);
                 
-                console.log(`CS: Converted markdown preview: "${markdownContent.substring(0, 200)}..."`);
                 
                 // Use the markdown content as our clean rich content
                 let cleanRichContent = markdownContent;
                 
-                console.log(`CS: Cleaned HTML content preview: "${cleanRichContent.substring(0, 200)}..."`);
                 
                 // Combine text content with attachment info (for analysis detection)
                 let combinedTextContent = textContent;
@@ -486,7 +482,6 @@ function extractAttachments(turnElement) {
     
     console.log("CS: extractAttachments - starting extraction...");
     console.log("CS: Turn element classes:", turnElement.className);
-    console.log("CS: Turn element preview:", turnElement.outerHTML.substring(0, 300) + "...");
     
     // Look for Google AI Studio specific file chunk structure
     const fileChunks = turnElement.querySelectorAll('ms-file-chunk');
@@ -786,7 +781,6 @@ async function climbAndScrapeHistory() {
         
         console.log(`CS: Processing turn ${turnIndex} (${safetyBreak} iterations left)`);
         console.log(`CS: Turn classes: ${currentTurn.className}`);
-        console.log(`CS: Turn HTML preview: ${currentTurn.outerHTML.substring(0, 200)}...`);
         
         // Check for cancellation
         if (analysisCancelled) {
@@ -1460,7 +1454,6 @@ async function loadAnalysis(showAlerts = true) {
   }
   console.log("CS: Found last model turn:", lastModelTurn);
   console.log("CS: Last model turn classes:", lastModelTurn.className);
-  console.log("CS: Last model turn HTML preview:", lastModelTurn.outerHTML.substring(0, 500) + "...");
 
   // DOM-first extraction from the last model turn
   const domExtract = extractJsonAndMermaidFromDom(lastModelTurn);
@@ -1735,8 +1728,6 @@ async function openFilteredBranch(branchName) {
 
   const finalContentForNewChat = `Please continue the conversation based on the following context, which is a complete thread from a previous chat including its main branch context. This contains ${threadInfo.totalMessages} messages total (${threadInfo.mainBranchMessages} from main branch context + ${threadInfo.threadSpecificMessages} from the selected "${branchName}" thread). The conversation branches at message ${threadInfo.branchPoint || 'N/A'}. Preserve the code formatting and structure:${attachmentNotice}\n\n${filteredContent}`;
   
-  console.log("CS: Prepared content for clipboard (length):", finalContentForNewChat.length);
-  console.log("CS: Content preview:", finalContentForNewChat.substring(0, 200) + "...");
   
   console.log("CS: Attempting to copy to clipboard...");
   
