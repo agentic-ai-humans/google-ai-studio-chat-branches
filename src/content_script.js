@@ -1,6 +1,5 @@
 
 // content_script.js
-console.log("CS: Google AI Studio Chat Branches - Content script loaded.");
 
 let pageConfig = { turnSelector: null };
 
@@ -10,7 +9,6 @@ function generateChatId() {
   // Remove any hash/fragment and query params to focus on the core chat URL
   const cleanUrl = url.split('#')[0].split('?')[0];
   
-  console.log("CS: Checking URL for chat ID generation:", cleanUrl);
   
   // Only work on URLs with format: https://aistudio.google.com/prompts/[CHAT_ID]
   // where CHAT_ID is a specific alphanumeric string (not "new_chat" or similar)
@@ -21,15 +19,12 @@ function generateChatId() {
     const chatId = match[1];
     // Exclude template URLs like "new_chat", "new", etc.
     if (chatId === 'new_chat' || chatId === 'new' || chatId.length < 10) {
-      console.log("CS: Detected template URL, returning null chat ID");
       return null;
     }
     
-    console.log("CS: Valid chat ID found:", chatId);
     return `chat_${chatId}`;
   }
   
-  console.log("CS: URL does not match chat pattern, returning null chat ID");
   return null; // Not a valid chat URL
 }
 
@@ -106,7 +101,6 @@ function showProgressOverlay() {
   `;
   
   document.body.appendChild(progressOverlay);
-  console.log('CS: Progress overlay shown');
 }
 
 function updateProgressOverlay(message, progress = 0) {
@@ -123,14 +117,12 @@ function updateProgressOverlay(message, progress = 0) {
     progressBar.style.width = Math.min(100, Math.max(0, progress)) + '%';
   }
   
-  console.log(`CS: Progress updated: ${message} (${progress}%)`);
 }
 
 function hideProgressOverlay() {
   if (progressOverlay) {
     progressOverlay.remove();
     progressOverlay = null;
-    console.log('CS: Progress overlay hidden');
   }
 }
 
@@ -138,11 +130,9 @@ function determinePageConfiguration() {
   const chatId = getCurrentChatId();
   // Only set turn selector if we have a valid chat ID (i.e., we're on an actual chat page)
   pageConfig.turnSelector = chatId ? 'ms-chat-turn' : null;
-  console.log("CS: Page configuration determined:", { chatId, turnSelector: pageConfig.turnSelector });
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log("CS: Received message:", request);
   switch (request.action) {
     case 'getCurrentChatInfo':
       // Return current chat ID and check if data exists for this chat
@@ -196,25 +186,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ status: 'ok' });
       break;
     case 'openBranchInNewChat':
-      console.log("CS: Opening branch:", request.branchName);
       if (request.branchName) {
         openFilteredBranch(request.branchName);
       } else {
-        console.error("CS: No branchName provided for openBranchInNewChat");
       }
       sendResponse({ status: 'ok' });
       break;
     case 'goToBranch':
-      console.log("CS: Going to branch:", request.branchName);
       if (request.branchName) {
         goToBranch(request.branchName);
       } else {
-        console.error("CS: No branchName provided for goToBranch");
       }
       sendResponse({ status: 'ok' });
       break;
     case 'cancelAnalysis':
-      console.log("CS: Analysis cancellation requested");
       analysisCancelled = true;
       sendResponse({ status: 'cancelled' });
       break;
@@ -224,24 +209,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Function to scroll to the bottom of the chat
 function scrollToBottomOfChat() {
-  console.log("CS: Scrolling to bottom of chat...");
   
   determinePageConfiguration();
   if (!pageConfig.turnSelector) { 
-    console.log("CS: Could not determine page configuration for scrolling");
     return; 
   }
 
   const allTurns = Array.from(document.querySelectorAll(pageConfig.turnSelector));
   if (allTurns.length === 0) { 
-    console.log("CS: No messages found to scroll to");
     return; 
   }
 
   // Get the last (newest) message
   const lastTurn = allTurns[allTurns.length - 1];
   
-  console.log(`CS: Found ${allTurns.length} messages, scrolling to the last one`);
   
   // Scroll to the last message with smooth behavior
   lastTurn.scrollIntoView({ 
@@ -258,7 +239,6 @@ function scrollToBottomOfChat() {
     });
   }, 500);
   
-  console.log("CS: Scroll to bottom completed");
 }
 
 // --- TURNDOWN.JS HTML TO MARKDOWN CONVERTER ---
@@ -322,14 +302,12 @@ function htmlToMarkdown(html) {
             .trim();
         
     } catch (error) {
-        console.error('CS: CRITICAL - Turndown conversion failed!', {
             error: error.message,
             htmlLength: html ? html.length : 0,
             htmlPreview: html ? html.substring(0, 200) + '...' : 'null'
         });
         
         // Explicit fallback with warning - user should know markdown conversion failed
-        console.warn('CS: Using fallback HTML cleaning - formatting may be degraded');
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
         let cleanedHtml = tempDiv.innerHTML
@@ -480,12 +458,9 @@ function extractTurnContent(turnElement, userMessages, timeout = 3000) {
 function extractAttachments(turnElement) {
     const attachments = [];
     
-    console.log("CS: extractAttachments - starting extraction...");
-    console.log("CS: Turn element classes:", turnElement.className);
     
     // Look for Google AI Studio specific file chunk structure
     const fileChunks = turnElement.querySelectorAll('ms-file-chunk');
-    console.log(`CS: Found ${fileChunks.length} file chunks in turn`);
     
     fileChunks.forEach((fileChunk, index) => {
         // Look for the filename in the span with title attribute
@@ -583,11 +558,8 @@ function extractAttachments(turnElement) {
                 });
             }
             
-            console.log(`CS: Found attachment ${index + 1}: ${fileName} (${fileType}) - ${tokenCount}`);
             if (attachmentTimestamp) {
-                console.log(`CS: Attachment timestamp: ${attachmentTimestamp}`);
             } else {
-                console.log(`CS: No timestamp found for attachment`);
             }
             
             attachments.push({
@@ -668,20 +640,17 @@ function extractAttachments(turnElement) {
 
 // Extract user messages from scrollbar aria-labels
 function extractUserMessagesFromScrollbar() {
-    console.log("CS: Extracting user messages from scrollbar...");
     const userMessages = new Map(); // turnId -> userMessage
     
     try {
         // Find the scrollbar section
         const scrollbar = document.querySelector('ms-prompt-scrollbar');
         if (!scrollbar) {
-            console.log("CS: No scrollbar found");
             return userMessages;
         }
         
         // Find all scrollbar items with aria-label
         const scrollbarItems = scrollbar.querySelectorAll('.prompt-scrollbar-item button[aria-label][aria-controls]');
-        console.log(`CS: Found ${scrollbarItems.length} scrollbar items`);
         
         scrollbarItems.forEach((item, index) => {
             const ariaLabel = item.getAttribute('aria-label');
@@ -701,16 +670,13 @@ function extractUserMessagesFromScrollbar() {
                 
                 if (!isUILabel && !isAnalysisPrompt) {
                     userMessages.set(turnId, ariaLabel);
-                    console.log(`CS: Found user message for ${turnId}: "${ariaLabel.substring(0, 100)}..."`);
                 }
             }
         });
         
-        console.log(`CS: Extracted ${userMessages.size} user messages from scrollbar`);
         return userMessages;
         
     } catch (error) {
-        console.error("CS: Error extracting user messages from scrollbar:", error);
         return userMessages;
     }
 }
@@ -751,13 +717,11 @@ function isThinkingOnlyTurn(turnElement) {
     }
     
     // If we got here, this turn only has thinking content
-    console.log(`CS: Turn contains only thinking content`);
     return true;
 }
 
 // --- OSTATECZNA WERSJA: WSPINACZKA I ZBIERANIE DANYCH JEDNOCZEŚNIE ---
 async function climbAndScrapeHistory() {
-    console.log("CS: Starting FINAL climb & scrape process...");
     determinePageConfiguration();
     if (!pageConfig.turnSelector) { return []; }
 
@@ -779,12 +743,9 @@ async function climbAndScrapeHistory() {
         const processedTurns = totalTurns - turnIndex + 1;
         sendScrollProgress(processedTurns, totalTurns, 'climbing');
         
-        console.log(`CS: Processing turn ${turnIndex} (${safetyBreak} iterations left)`);
-        console.log(`CS: Turn classes: ${currentTurn.className}`);
         
         // Check for cancellation
         if (analysisCancelled) {
-          console.log("CS: Analysis cancelled during climbing");
           return scrapedHistory;
         }
         
@@ -793,12 +754,10 @@ async function climbAndScrapeHistory() {
 
         // Get turn ID for this turn
         const turnId = currentTurn.id;
-        console.log(`CS: Processing turn with ID: ${turnId}`);
         
         // Check if this turn contains only thinking content
         const hasOnlyThinking = isThinkingOnlyTurn(currentTurn);
         if (hasOnlyThinking) {
-            console.log(`CS: Skipping thinking-only turn ${turnId}`);
             // Skip this turn entirely - don't increment message numbers
         } else {
             // First try to extract content from the turn element itself
@@ -835,15 +794,11 @@ async function climbAndScrapeHistory() {
                         }
                     }
                     
-                    console.log(`CS: Detected role for turn ${turnId}: ${role}`);
-                    console.log(`CS: Adding ${role} message with full content`);
                     
                     // Validate critical data before storing
                     if (!content.richContent && !content.textContent) {
-                        console.warn(`CS: Message ${turnIndex} has no content - this may cause issues`);
                     }
                     if (!turnId) {
-                        console.error(`CS: CRITICAL - Message ${turnIndex} missing turnId - Go to Branch will fail!`);
                     }
                     
                     scrapedHistory.push({ 
@@ -858,7 +813,6 @@ async function climbAndScrapeHistory() {
 
         const previousTurn = currentTurn.previousElementSibling;
         if (!previousTurn || !previousTurn.matches(pageConfig.turnSelector)) {
-            console.log("CS: Reached the absolute top turn. Scrape finished.");
             break;
         }
         currentTurn = previousTurn;
@@ -866,7 +820,6 @@ async function climbAndScrapeHistory() {
         await new Promise(resolve => setTimeout(resolve, 50));
     }
     
-    if (safetyBreak <= 0) console.warn("CS: Scrape safety break triggered.");
     
     // Odwracamy zebraną historię, aby była w poprawnej kolejności
     return scrapedHistory.reverse();
@@ -907,7 +860,6 @@ function checkIfAtBottomOfChat() {
   
   const isAtBottom = isLastMessageVisible && isNearBottom;
   
-  console.log("CS: Scroll position check:", {
     isLastMessageVisible,
     isNearBottom,
     isAtBottom,
@@ -967,7 +919,6 @@ function sendScrollProgress(current, total, phase = 'climbing') {
       phase: phase
     });
   } catch (error) {
-    console.log('Could not send scroll progress update:', error);
   }
 }
 
@@ -978,7 +929,6 @@ function sendAnalysisComplete() {
 
 // Main analysis function
 async function analyzeAndPrepare() {
-  console.log("CS: Analysis process started.");
   analysisCancelled = false;
   
   // Show progress overlay
@@ -990,15 +940,12 @@ async function analyzeAndPrepare() {
   
   if (scrollCheck.error) {
     hideProgressOverlay();
-    console.error("CS: Scroll check failed:", scrollCheck.error);
     return;
   }
   
   // Log position but don't block analysis - user has scroll button available
   if (!scrollCheck.isAtBottom) {
-    console.warn(`CS: User not at bottom of chat (${Math.round(scrollCheck.distanceFromBottom)}px from bottom). Proceeding with analysis anyway since scroll button is available.`);
   } else {
-    console.log("CS: User is at bottom of chat, proceeding with analysis.");
   }
   
   updateProgressOverlay("Collecting chat history...", 15);
@@ -1007,9 +954,7 @@ async function analyzeAndPrepare() {
   updateProgressOverlay("Processing messages...", 60);
   
   if (scrapedHistory.length === 0) {
-    console.warn("CS: Scrape completed but found no content. Aborting.");
     hideProgressOverlay();
-    console.error("CS: Could not find any content to analyze");
     return;
   }
   
@@ -1019,7 +964,6 @@ async function analyzeAndPrepare() {
   scrapedHistory.forEach((message, index) => {
       // Check for cancellation
       if (analysisCancelled) {
-        console.log("CS: Analysis cancelled, stopping processing");
         return;
       }
       
@@ -1049,13 +993,11 @@ async function analyzeAndPrepare() {
       
       // Skip thinking content entirely (don't include in message count)
       if (isThinkingContent) {
-        console.log(`CS: Skipping thinking content at index ${index + 1} (detected AI reasoning)`);
         return;
       }
       
       // For analysis prompts, replace content with placeholder but keep the message
       if (isAnalysisPrompt) {
-        console.log(`CS: Replacing analysis prompt content at index ${index + 1} (length: ${message.textContent.length})`);
         const placeholderText = "Chat history skipped because it was meant for the analysis prompt, no need to reflect to this content.";
         
         chatHistoryForStorage.push({ 
@@ -1095,14 +1037,12 @@ async function analyzeAndPrepare() {
   
   // Final cancellation check before saving
   if (analysisCancelled) {
-    console.log("CS: Analysis cancelled before saving data");
     sendAnalysisComplete();
     return;
   }
   
   const chatId = getCurrentChatId();
   const timestamp = Date.now();
-  console.log("CS: Using chat ID:", chatId);
   chrome.storage.local.set({ 
     [`chat_history_${chatId}`]: chatHistoryForStorage,
     current_chat_id: chatId,
@@ -1261,7 +1201,6 @@ function watchForAnalysisResponse(scrapedHistory) {
                     const turnId = String(action.id);
                     const branchName = String(action.branch_hint || action.branch || '').trim();
                     if (!branchName) {
-                      console.error(`CS: CRITICAL - Commit action missing branch name!`, {
                         actionId: action.id,
                         actionType: action.type,
                         branchHint: action.branch_hint,
@@ -1280,7 +1219,6 @@ function watchForAnalysisResponse(scrapedHistory) {
                 storageData[`branch_map_${chatId}`] = enhancedBranchMap;
               }
             } catch (e) {
-              console.warn('CS: Failed to parse JSON from DOM extract', e);
             }
           }
 
@@ -1293,7 +1231,6 @@ function watchForAnalysisResponse(scrapedHistory) {
             storageData[`analysis_completed_${chatId}`] = true;
             chrome.storage.local.set(storageData);
             chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
-              console.log('CS: Cleared data_cleared flag for chat:', chatId);
             });
             // Notify popup and restore scroll position
             safeSendToPopup({ action: 'analysisCompleted', chatId });
@@ -1302,7 +1239,6 @@ function watchForAnalysisResponse(scrapedHistory) {
             return;
           }
         } catch (err) {
-          console.warn('CS: DOM-first extraction failed', err);
         }
       }
 
@@ -1314,7 +1250,6 @@ function watchForAnalysisResponse(scrapedHistory) {
   
   // Send completion signal
   sendAnalysisComplete();
-  console.log("CS: Analysis response received and processed");
 }
 
 // Extract JSON and Mermaid code text from AI Studio code panels (handles combined block)
@@ -1323,11 +1258,9 @@ function extractJsonAndMermaidFromDom(turnRoot) {
     const result = { json: null, mermaid: null };
     // First, prefer panels inside ms-code-block
     let panels = Array.from(turnRoot.querySelectorAll('ms-code-block .mat-expansion-panel'));
-    console.log(`CS: Found ${panels.length} expansion panels in ms-code-block elements`);
     // If none found, fall back to any expansion panel within the turn
     if (panels.length === 0) {
       panels = Array.from(turnRoot.querySelectorAll('.mat-expansion-panel'));
-      console.log(`CS: Fallback - Found ${panels.length} expansion panels within the turn`);
     }
     
     panels.forEach((panel, index) => {
@@ -1351,41 +1284,31 @@ function extractJsonAndMermaidFromDom(turnRoot) {
       }
       const codeEl = panel.querySelector('pre code');
       if (!codeEl) {
-        console.log(`CS: Panel ${index + 1} has no code element`);
         return;
       }
       let code = codeEl.textContent || '';
-      console.log(`CS: Panel ${index + 1} title: "${title}", code length: ${code.length}`);
-      console.log(`CS: Panel ${index + 1} title elements:`, titleEl ? titleEl.innerHTML : 'none');
-      console.log(`CS: Panel ${index + 1} code preview:`, code.substring(0, 100) + '...');
       
       // Strip helper markers and zero-width spaces/highlights
       code = code.replace(/IGNORE_WHEN_COPYING_START[\s\S]*?IGNORE_WHEN_COPYING_END/g, '');
       code = code.replace(/\u200B/g, '');
       
       if (/^JSON$/i.test(title)) {
-        console.log(`CS: Processing JSON panel ${index + 1}`);
         // Find first balanced JSON object
         const json = extractFirstBalancedJson(code);
         if (json && !result.json) {
           result.json = json;
-          console.log(`CS: Extracted JSON from panel ${index + 1}, length: ${json.length}`);
         }
         // Combined blocks are handled by separate Mermaid panels - no text parsing needed
       } else if (/^Mermaid$/i.test(title)) {
-        console.log(`CS: Processing Mermaid panel ${index + 1}`);
         if (!result.mermaid) {
           result.mermaid = code.replace(/```/g, '').trim();
-          console.log(`CS: Extracted Mermaid from panel ${index + 1}, length: ${result.mermaid.length}`);
         }
       }
     });
     
-    console.log(`CS: Final extraction result - JSON: ${!!result.json}, Mermaid: ${!!result.mermaid}`);
     // No text-based fallbacks - only use DOM-based extraction from expansion panels
     return result;
   } catch (error) {
-    console.error('CS: Error in extractJsonAndMermaidFromDom:', error);
     return { json: null, mermaid: null };
   }
 }
@@ -1411,22 +1334,16 @@ function extractFirstBalancedJson(text) {
 async function loadAnalysis(showAlerts = true) {
   
   determinePageConfiguration();
-  console.log("CS: Page config determined:", pageConfig);
   
   if (!pageConfig.turnSelector) {
-    console.log("CS: ERROR - No turn selector found");
-    console.error("CS: Could not determine page configuration");
     return;
   }
 
   // Find the last model turn using the same logic as climbAndScrapeHistory
   // NOTE: We're looking for the NEWEST message (analysis response) that came AFTER step 1
-  console.log("CS: Looking for all turns with selector:", pageConfig.turnSelector);
   const allTurns = Array.from(document.querySelectorAll(pageConfig.turnSelector));
-  console.log("CS: Found all turns now:", allTurns.length);
   
   if (allTurns.length === 0) {
-    console.log("CS: INFO - No turns found on this page");
     return;
   }
 
@@ -1435,30 +1352,23 @@ async function loadAnalysis(showAlerts = true) {
   let lastModelTurn = null;
   for (let i = allTurns.length - 1; i >= 0; i--) {
     const turn = allTurns[i];
-    console.log(`CS: Checking turn ${i}: classes =`, turn.className);
     
     // Check if it's a model turn (not user turn)
     const isModelTurn = !turn.classList.contains('user');
-    console.log(`CS: Turn ${i} is model turn:`, isModelTurn);
     
     if (isModelTurn) {
       lastModelTurn = turn;
-      console.log("CS: Found last model turn (analysis response) at index:", i);
       break;
     }
   }
   
   if (!lastModelTurn) {
-    console.log("CS: INFO - No model turns found (normal for pages without AI responses)");
     return;
   }
-  console.log("CS: Found last model turn:", lastModelTurn);
-  console.log("CS: Last model turn classes:", lastModelTurn.className);
 
   // DOM-first extraction from the last model turn
   const domExtract = extractJsonAndMermaidFromDom(lastModelTurn);
   const chatId = getCurrentChatId();
-  if (!chatId) { console.log('CS: ERROR - No chat ID found'); return; }
   const storageData = { current_chat_id: chatId };
   let enhancedBranchMap = {};
 
@@ -1469,7 +1379,6 @@ async function loadAnalysis(showAlerts = true) {
       const chatHistory = stored[`chat_history_${chatId}`];
       
       if (!chatHistory || !Array.isArray(chatHistory)) {
-        console.error('CS: CRITICAL - Chat history missing or invalid!', {
           chatId,
           chatHistoryExists: !!chatHistory,
           chatHistoryType: typeof chatHistory,
@@ -1484,7 +1393,6 @@ async function loadAnalysis(showAlerts = true) {
             const turnId = String(action.id);
             const branchName = String(action.branch_hint || action.branch || '').trim();
             if (!branchName) {
-              console.error(`CS: CRITICAL - Commit action missing branch name in loadAnalysis!`, {
                 actionId: action.id,
                 actionType: action.type,
                 branchHint: action.branch_hint,
@@ -1503,27 +1411,22 @@ async function loadAnalysis(showAlerts = true) {
         storageData[`branch_map_${chatId}`] = enhancedBranchMap;
       }
     } catch (e) {
-      console.warn('CS: Failed to parse DOM-extracted JSON in loadAnalysis', e);
     }
   }
 
   if (domExtract.mermaid) {
     storageData[`mermaid_diagram_${chatId}`] = domExtract.mermaid;
-    console.log('CS: Storing Mermaid data, length:', domExtract.mermaid.length);
-    console.log('CS: Mermaid preview:', domExtract.mermaid.substring(0, 100) + '...');
   }
 
   if (storageData[`json_data_${chatId}`] || storageData[`mermaid_diagram_${chatId}`]) {
     storageData[`analysis_completed_${chatId}`] = true;
     chrome.storage.local.set(storageData);
     chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
-      console.log('CS: Cleared data_cleared flag for chat:', chatId);
     });
     // Notify popup to auto-reload
     safeSendToPopup({ action: 'analysisCompleted', chatId });
     return { hasJsonData: !!storageData[`json_data_${chatId}`], hasMermaidData: !!storageData[`mermaid_diagram_${chatId}`] };
   } else {
-    console.log('CS: INFO - No artifacts extracted from DOM in loadAnalysis');
     return { hasJsonData: false, hasMermaidData: false };
   }
 }
@@ -1532,25 +1435,18 @@ async function openFilteredBranch(branchName) {
   
   // Use current chat ID for this page
   const chatId = getCurrentChatId();
-  console.log("CS: Chat ID:", chatId);
   
   if (!chatId) {
-    console.log("CS: ERROR - No chat ID found");
-    console.error("CS: No chat session found");
     return;
   }
   
-  console.log("CS: Getting data from storage...");
   const data = await chrome.storage.local.get([`chat_history_${chatId}`, `branch_map_${chatId}`]);
-  console.log("CS: Chat history length:", data[`chat_history_${chatId}`] ? data[`chat_history_${chatId}`].length : 0);
-  console.log("CS: Thread map exists:", !!data[`branch_map_${chatId}`]);
   
   const branchMap = data[`branch_map_${chatId}`];
   const chatHistory = data[`chat_history_${chatId}`];
   
   // FAIL FAST: Validate required data exists
   if (!chatHistory || !Array.isArray(chatHistory)) {
-    console.error("CS: CRITICAL - Chat history missing or invalid!", {
       chatId,
       chatHistoryExists: !!chatHistory,
       chatHistoryType: typeof chatHistory,
@@ -1560,7 +1456,6 @@ async function openFilteredBranch(branchName) {
   }
   
   if (!branchMap || typeof branchMap !== 'object') {
-    console.error("CS: CRITICAL - Branch map missing or invalid!", {
       chatId,
       branchMapExists: !!branchMap,
       branchMapType: typeof branchMap,
@@ -1569,14 +1464,11 @@ async function openFilteredBranch(branchName) {
     return;
   }
   
-  console.log("CS: Thread map:", branchMap);
-  console.log("CS: Looking for thread name:", branchName);
   const threadMessages = chatHistory.filter(message => {
     const messageThreadData = branchMap[String(message.id)];
     
     // FAIL FAST: Validate thread data structure
     if (messageThreadData && typeof messageThreadData !== 'object') {
-      console.error(`CS: CRITICAL - Invalid thread data format for message ${message.id}!`, {
         messageId: message.id,
         threadDataType: typeof messageThreadData,
         threadData: messageThreadData,
@@ -1589,21 +1481,17 @@ async function openFilteredBranch(branchName) {
     const messageThread = messageThreadData ? messageThreadData.thread : null;
     
     if (messageThreadData && !messageThread) {
-      console.error(`CS: CRITICAL - Thread data missing thread property for message ${message.id}!`, {
         messageId: message.id,
         threadData: messageThreadData
       });
     }
     
-    console.log(`CS: Message ${message.id} -> thread "${messageThread}" (looking for "${branchName}")`);
     return messageThread === branchName;
   });
   
-  console.log("CS: Found thread messages:", threadMessages.length);
   
   // FAIL FAST: Validate we found messages for this branch
   if (threadMessages.length === 0) {
-    console.error(`CS: CRITICAL - No messages found for branch "${branchName}"!`, {
       branchName,
       chatId,
       totalChatHistory: chatHistory.length,
@@ -1616,7 +1504,6 @@ async function openFilteredBranch(branchName) {
   // Find the first message of the selected thread to determine the branch point
   const firstThreadMessage = threadMessages[0];
   const branchPoint = firstThreadMessage.id;
-  console.log("CS: Branch point (first message of thread):", branchPoint);
   
   // Get all main branch messages BEFORE the branch point + all messages from the selected thread
   const contextMessages = [];
@@ -1624,22 +1511,18 @@ async function openFilteredBranch(branchName) {
   // Add main branch context (all messages before the branch point)
   if (branchPoint) {
     const mainBranchContext = chatHistory.filter(message => message.id < branchPoint);
-    console.log("CS: Adding main branch context messages:", mainBranchContext.length);
     contextMessages.push(...mainBranchContext);
   }
   
   // Add all messages from the selected thread
-  console.log("CS: Adding selected thread messages:", threadMessages.length);
   contextMessages.push(...threadMessages);
   
   // Sort by ID to ensure chronological order
   contextMessages.sort((a, b) => a.id - b.id);
   
-  console.log("CS: Total context messages (main + branch):", contextMessages.length);
   
   // FAIL FAST: This should never happen if we have thread messages
   if (contextMessages.length === 0) {
-    console.error(`CS: CRITICAL - No context messages assembled for branch "${branchName}"!`, {
       branchName,
       threadMessagesLength: threadMessages.length,
       branchPoint,
@@ -1729,11 +1612,9 @@ async function openFilteredBranch(branchName) {
   const finalContentForNewChat = `Please continue the conversation based on the following context, which is a complete thread from a previous chat including its main branch context. This contains ${threadInfo.totalMessages} messages total (${threadInfo.mainBranchMessages} from main branch context + ${threadInfo.threadSpecificMessages} from the selected "${branchName}" thread). The conversation branches at message ${threadInfo.branchPoint || 'N/A'}. Preserve the code formatting and structure:${attachmentNotice}\n\n${filteredContent}`;
   
   
-  console.log("CS: Attempting to copy to clipboard...");
   
   // Try to focus the document first
   if (document.hasFocus && !document.hasFocus()) {
-    console.log("CS: Document not focused, attempting to focus...");
     window.focus();
     document.body.focus();
   }
@@ -1747,10 +1628,7 @@ function copyToClipboardContentScript(text, branchName, threadInfo) {
   // Try modern clipboard API first (with focus attempt)
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => {
-      console.log("CS: Successfully copied to clipboard!");
-      console.log(`Thread "${branchName}" copied to clipboard - ${threadInfo.totalMessages} messages total`);
     }).catch(err => {
-      console.error('CS: Clipboard API failed:', err);
       fallbackCopyContentScript(text, branchName, threadInfo);
     });
   } else {
@@ -1777,13 +1655,10 @@ function fallbackCopyContentScript(text, branchName, threadInfo) {
     document.body.removeChild(textArea);
     
     if (successful) {
-      console.log("CS: Successfully copied using fallback method!");
-      console.log(`Thread "${branchName}" copied to clipboard - ${threadInfo.totalMessages} messages total`);
     } else {
       throw new Error('execCommand copy failed');
     }
   } catch (err) {
-    console.error('CS: Fallback copy failed:', err);
     // Show manual copy dialog as last resort
     showManualCopyDialogContentScript(text, branchName, threadInfo);
   }
@@ -1846,21 +1721,17 @@ function showManualCopyDialogContentScript(text, branchName, threadInfo) {
   textarea.focus();
   textarea.select();
   
-  console.log("CS: Manual copy dialog shown");
 }
 
 async function goToBranch(branchName) {
   
   // Use current chat ID for this page
   const chatId = getCurrentChatId();
-  console.log("CS: Chat ID:", chatId);
   
   if (!chatId) {
-    console.log("CS: ERROR - No chat ID found");
     return;
   }
   
-  console.log("CS: Getting data from storage...");
   const data = await chrome.storage.local.get([`chat_history_${chatId}`, `branch_map_${chatId}`]);
   
   const branchMap = data[`branch_map_${chatId}`];
@@ -1868,7 +1739,6 @@ async function goToBranch(branchName) {
   
   // FAIL FAST: Validate required data exists
   if (!chatHistory || !Array.isArray(chatHistory)) {
-    console.error("CS: CRITICAL - Chat history missing for branch navigation!", {
       chatId,
       branchName,
       chatHistoryExists: !!chatHistory,
@@ -1879,7 +1749,6 @@ async function goToBranch(branchName) {
   }
   
   if (!branchMap || typeof branchMap !== 'object') {
-    console.error("CS: CRITICAL - Branch map missing for branch navigation!", {
       chatId,
       branchName,
       branchMapExists: !!branchMap,
@@ -1904,19 +1773,16 @@ async function goToBranch(branchName) {
   for (const messageNum of sortedMessageNums) {
     const threadData = branchMap[messageNum];
     if (threadData === undefined || threadData === null) {
-      console.warn(`CS: Skipping message ${messageNum} - no thread data`);
       continue;
     }
     
     // New format only: object with thread and turnId
     if (typeof threadData !== 'object' || threadData === null) {
-      console.warn(`CS: Unexpected data format at ${messageNum}, expected { thread, turnId }`);
       continue;
     }
     const threadForMessage = threadData.thread;
     const storedTurnId = threadData.turnId || null;
     
-    console.log(`CS: Message ${messageNum}: Thread="${threadForMessage}", StoredTurnId="${storedTurnId}"`);
     
     if (threadForMessage === branchName) {
       // Get the corresponding message from chat history
@@ -1926,15 +1792,11 @@ async function goToBranch(branchName) {
       
       // Show first few words of the message content for verification
       const messagePreview = (lastMessageInThread.textContent || lastMessageInThread.richContent || 'No content').substring(0, 100);
-      console.log(`CS: ✅ FOUND last message in branch "${branchName}" at message ${messageNum}`);
-      console.log(`CS: 🎯 Using stored turnId: ${storedTurnId || 'Not stored, using fallback'}`);
-      console.log(`CS: 📝 Message content preview: "${messagePreview}..."`);
       break;
     }
   }
   
   if (!lastMessageInThread) {
-    console.error(`CS: CRITICAL - No message found for branch "${branchName}"!`, {
       branchName,
       chatId,
       branchMapSize: Object.keys(branchMap).length,
@@ -1947,13 +1809,10 @@ async function goToBranch(branchName) {
   
   // If turnId is undefined (old analysis data), try to find the turn element by scanning the page
   if (!lastTurnId && lastMessageNumber) {
-    console.log(`CS: ⚠️ Turn ID is undefined for message ${lastMessageNumber}, trying to find turn element by scanning page...`);
     const allTurns = document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn');
-    console.log(`CS: Found ${allTurns.length} total turns on page`);
     
     // Log all turn IDs on the page for debugging
     allTurns.forEach((turn, index) => {
-      console.log(`CS: Turn ${index}: ID="${turn.id}"`);
     });
     
     // Try to map the message number to a turn element by position
@@ -1963,16 +1822,12 @@ async function goToBranch(branchName) {
       if (turnIndex >= 0 && turnIndex < allTurns.length) {
         const estimatedTurn = allTurns[turnIndex];
         lastTurnId = estimatedTurn.id;
-        console.log(`CS: Estimated turn ID by position: ${lastTurnId} (index ${turnIndex})`);
-        console.log(`CS: Message ${lastMessageNumber} should map to turn index ${turnIndex} out of ${allTurns.length} total turns`);
       } else {
-        console.log(`CS: Invalid turn index ${turnIndex} for ${allTurns.length} turns`);
       }
     }
   }
   
   if (!lastTurnId) {
-    console.error(`CS: CRITICAL - Could not find turn ID for branch "${branchName}"!`, {
       branchName,
       chatId,
       lastMessageNumber,
@@ -1980,28 +1835,22 @@ async function goToBranch(branchName) {
       turnIdFromStorage: lastMessageInThread ? lastMessageInThread.turnId : 'N/A',
       allTurnsOnPage: document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn').length
     });
-    console.error("CS: SUGGESTION - Re-run analysis to generate turn IDs for branch navigation");
     return;
   }
   
-  console.log("CS: Target turn ID:", lastTurnId);
   
   // Find the turn element on the page and scroll to it
   const turnElement = document.getElementById(lastTurnId);
   if (turnElement) {
-    console.log("CS: ✅ Found turn element, scrolling to turn:", lastTurnId);
     
     // Log some info about the element we found
     const turnContent = turnElement.querySelector('.turn-content');
     if (turnContent) {
       const contentPreview = turnContent.textContent?.substring(0, 100) || 'No text content';
-      console.log("CS: 🎯 ACTUAL turn content:", contentPreview);
       
       const expectedContent = (lastMessageInThread.textContent || lastMessageInThread.richContent || 'No content').substring(0, 100);
-      console.log("CS: 📝 EXPECTED content:", expectedContent);
       
       const isMatch = contentPreview.includes(expectedContent.substring(0, 30)) || expectedContent.includes(contentPreview.substring(0, 30));
-      console.log("CS: ⚖️ CONTENT MATCH:", isMatch);
     }
     
     turnElement.scrollIntoView({ 
@@ -2017,9 +1866,7 @@ async function goToBranch(branchName) {
       turnElement.style.backgroundColor = '';
     }, 2000);
     
-    console.log("CS: ✅ Successfully navigated to branch");
   } else {
-    console.error(`CS: CRITICAL - Turn element not found in DOM for branch "${branchName}"!`, {
       branchName,
       chatId,
       targetTurnId: lastTurnId,
@@ -2028,7 +1875,6 @@ async function goToBranch(branchName) {
       totalTurnsOnPage: document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn').length,
       availableTurnIds: Array.from(document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn')).map(t => t.id).slice(0, 10)
     });
-    console.error("CS: This indicates the stored turnId doesn't match actual DOM elements");
   }
   
 }
