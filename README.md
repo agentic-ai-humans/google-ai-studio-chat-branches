@@ -2,6 +2,8 @@
 
 Transform your long AI conversations into organized, cherry-pickable branches with a Git-like workflow and visual branch mapping.
 
+> **🤖 100% AI-Generated Extension**: This entire Chrome extension was created using Cursor AI with no human coding. Every line of code, documentation, and feature was generated through AI-assisted development. See [Contributing](#contributing) for our AI-optimized issue reporting process.
+
 ## The Problem
 
 Long AI conversations inevitably branch into multiple topics - you start discussing one feature, then pivot to debugging, then explore new ideas, then return to implementation details. By message 50, you have a tangled mess where important discussions are scattered throughout the timeline, making it impossible to:
@@ -282,7 +284,14 @@ Unlike simple filtering, the extension provides **full context** by including:
 
 ## Version History
 
-### v3.1.0 (Current)
+### v3.1.1 (Current)
+- **Fixed mermaid.live URL generation**: Proper pako compression with JSON payload + deflate + base64-URL encoding
+- **Improved gitGraph syntax**: Fixed branch checkout commands and merge syntax in analysis prompt template
+- **Added pako.min.js library**: Enables correct mermaid.live integration
+- **Enhanced Show Graph button**: Now generates working mermaid.live URLs that auto-load diagrams
+- All changes generated 100% using Cursor AI
+
+### v3.1.0
 - Structured JSON gitGraph actions with exact turnIds (source of truth)
 - Mermaid kept clean for visualization
 - Branch dropdown fed from JSON; precise navigation via `{ thread, turnId }`
@@ -296,21 +305,122 @@ This project is licensed under the **MIT License**. See the `LICENSE` file for d
 
 ## Contributing
 
-Found a bug or have an idea for a new feature? Feel free to [open an issue](https://github.com/agentic-ai-humans/google-ai-studio-chat-branches/issues) in this repository.
+This extension was **100% generated using Cursor AI**. To maintain this workflow and ensure efficient AI-assisted development, please follow our structured issue reporting format.
 
-### Development
+### 🤖 AI-Optimized Issue Reporting
+
+When reporting bugs or requesting features, use this format for optimal Cursor AI processing:
+
+#### **Bug Reports**
+```markdown
+**ISSUE TYPE**: Bug Report
+**PRIORITY**: [Critical/High/Medium/Low]
+**BROWSER**: [Chrome Version X.X.X]
+**AI STUDIO URL**: [Specific URL pattern where issue occurs]
+
+**EXPECTED BEHAVIOR**:
+[Clear, specific description of what should happen]
+
+**ACTUAL BEHAVIOR**:
+[Clear, specific description of what actually happens]
+
+**REPRODUCTION STEPS**:
+1. [Specific action]
+2. [Specific action]
+3. [Specific result]
+
+**CONSOLE ERRORS** (F12 → Console):
+```
+[Paste any console errors here]
+```
+
+**EXTENSION STATE**:
+- Chat ID: [If known]
+- Analysis completed: [Yes/No]
+- Data timestamp: [If visible in popup]
+- Browser extensions: [List other extensions that might conflict]
+
+**ADDITIONAL CONTEXT**:
+[Any other relevant information]
+```
+
+#### **Feature Requests**
+```markdown
+**ISSUE TYPE**: Feature Request
+**USE CASE**: [Specific scenario where this feature would help]
+
+**PROPOSED SOLUTION**:
+[Clear description of desired functionality]
+
+**TECHNICAL CONSIDERATIONS**:
+- UI Changes: [What UI changes would be needed]
+- Data Storage: [Any new data storage requirements]
+- Performance Impact: [Expected impact on extension performance]
+- Browser Compatibility: [Any browser-specific considerations]
+
+**ALTERNATIVE SOLUTIONS**:
+[Other ways this could be implemented]
+
+**PRIORITY JUSTIFICATION**:
+[Why this feature should be prioritized]
+```
+
+#### **Code Improvement Suggestions**
+```markdown
+**ISSUE TYPE**: Code Improvement
+**FILE(S)**: [Specific files that could be improved]
+**CURRENT APPROACH**: [How it currently works]
+**SUGGESTED APPROACH**: [How it could be better]
+**BENEFITS**: [Performance, maintainability, etc.]
+**RISKS**: [Potential breaking changes or complications]
+```
+
+### 🛠️ Development Architecture
 
 The extension consists of:
-- `manifest.json` - Extension configuration
-- `popup.html/js` - User interface and interaction logic
-- `content_script.js` - Main functionality for chat analysis and thread extraction
+- `manifest.json` - Extension configuration and permissions
+- `popup.html/js` - User interface and workflow management
+- `content_script.js` - DOM manipulation and chat analysis
+- `pako.min.js` - Compression library for mermaid.live URLs
+- `turndown.min.js` - HTML to Markdown conversion
 - `icons/` - Extension icons for Chrome toolbar
 
-To contribute:
-1. Fork the repository
-2. Make your changes in the `src/` directory
-3. Test with Chrome Developer Mode
-4. Submit a pull request with clear description
+### 🔄 AI-Assisted Development Process
+
+1. **Issue Creation**: Use structured format above
+2. **AI Analysis**: Cursor AI analyzes the issue context
+3. **Code Generation**: AI generates fixes/features
+4. **Testing**: Manual testing in Chrome Developer Mode
+5. **Integration**: AI handles git commits and documentation updates
+
+### 📋 Issue Labels
+
+Use these labels for efficient categorization:
+- `bug` - Something is broken
+- `enhancement` - New feature request
+- `documentation` - Docs need improvement
+- `performance` - Performance optimization
+- `mermaid` - Related to Mermaid graph generation
+- `ui-ux` - User interface improvements
+- `ai-analysis` - Chat analysis algorithm improvements
+- `cursor-generated` - Fully AI-generated solution needed
+
+### 🚀 Quick Development Setup
+
+For AI-assisted development:
+1. Clone repository: `git clone [repo-url]`
+2. Open in Cursor: `cursor src/`
+3. Load extension: Chrome → Extensions → Developer Mode → Load Unpacked → Select `src/`
+4. Test on: `https://aistudio.google.com/prompts/[chat-id]`
+5. Use structured prompts for AI assistance
+
+### 💡 Contributing Guidelines
+
+- **Structured Issues**: Always use the templates above
+- **Context First**: Provide complete context for AI processing
+- **Test Scenarios**: Include specific test cases
+- **Browser Logs**: Always include console output
+- **AI-Friendly**: Write issues as if briefing an AI developer
 
 ---
 
