@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const scrollToBottomButton = document.getElementById('scrollToBottomButton');
   const analyzeButton = document.getElementById('analyzeButton');
-  // loadAnalysisButton removed - analysis now loads automatically
   const branchSelector = document.getElementById('branchSelector');
   const openBranchButton = document.getElementById('openBranchButton');
   const goToBranchButton = document.getElementById('goToBranchButton');
@@ -45,7 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
     incorrectDomainView: !!incorrectDomainView,
     scrollToBottomButton: !!scrollToBottomButton,
     analyzeButton: !!analyzeButton,
-    // loadAnalysisButton removed - auto-loading enabled
     goToBranchButton: !!goToBranchButton,
     branchSelector: !!branchSelector,
     openBranchButton: !!openBranchButton,
@@ -334,11 +332,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isLoadingData = false;
     function autoLoadAvailableData(chatId, chatInfo) {
       if (isLoadingData) {
-        console.log('AUTO-LOAD: Already loading data, skipping to prevent loop');
         return;
       }
       isLoadingData = true;
-      console.log('AUTO-LOAD: Checking for available data for chat:', chatId);
       
       // Check storage data first using standardized keys
       const keys = getStorageKeys(chatId);
@@ -349,7 +345,6 @@ document.addEventListener('DOMContentLoaded', () => {
         keys.dataCreated,
         keys.dataCleared
       ], (storageData) => {
-        console.log('AUTO-LOAD: Storage data keys found:', Object.keys(storageData));
         
         const hasStoredBranchMap = !!storageData[keys.branchMap];
         const hasStoredJsonData = !!storageData[keys.jsonData];
@@ -357,31 +352,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasStoredTimestamp = !!storageData[keys.dataCreated];
         const dataWasCleared = !!storageData[keys.dataCleared];
         
-        console.log('AUTO-LOAD: Storage availability:', {
-          branchMap: hasStoredBranchMap,
-          jsonData: hasStoredJsonData,
-          mermaidData: hasStoredMermaidData,
-          timestamp: hasStoredTimestamp,
-          dataWasCleared: dataWasCleared
-        });
         
         // If we have storage data, use it
         if (hasStoredBranchMap || hasStoredJsonData || hasStoredMermaidData) {
-          console.log('AUTO-LOAD: Loading from storage');
           loadDataFromStorage(storageData, chatId);
         }
         
         // CRITICAL: Only extract from page if NO storage data exists at all
         if (!dataWasCleared && !hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
-          console.log('AUTO-LOAD: No stored data found, checking page for fresh data...');
           sendMessageToContentScript({ action: 'loadAnalysis' }, (pageResult) => {
-            console.log('AUTO-LOAD: Page result:', pageResult);
             if (pageResult && (pageResult.hasJsonData || pageResult.hasMermaidData)) {
-              console.log('AUTO-LOAD: Found fresh data on page, loading it');
               // Fresh page data available, load it (this will override storage data)
               loadAnalysisDataFromPage();
             } else {
-              console.log('AUTO-LOAD: No fresh page data available');
               hideAllDataSections();
             }
             
@@ -390,13 +373,10 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         } else {
           if (dataWasCleared) {
-            console.log('AUTO-LOAD: Skipping page check - data was recently cleared by user');
           } else {
-            console.log('AUTO-LOAD: PRESERVING stored data - NOT re-extracting from page');
           }
           
           if (!hasStoredBranchMap && !hasStoredJsonData && !hasStoredMermaidData) {
-            console.log('AUTO-LOAD: No stored data available');
             hideAllDataSections();
           }
           
@@ -412,19 +392,9 @@ document.addEventListener('DOMContentLoaded', () => {
       extractedJsonData = storageData[keys.jsonData] || null;
       extractedMermaidData = storageData[keys.mermaidDiagram] || null;
       
-      console.log('🔍 POPUP: Loading data from storage for chatId:', chatId);
-      console.log('🔍 POPUP: Storage keys being accessed:', {
-        jsonDataKey: keys.jsonData,
-        mermaidDiagramKey: keys.mermaidDiagram,
-        branchMapKey: keys.branchMap,
-        chatHistoryKey: keys.chatHistory
-      });
-      console.log('🔍 POPUP: Available storage keys:', Object.keys(storageData));
-      console.log('🔍 POPUP: JSON data available:', !!extractedJsonData);
-      console.log('🔍 POPUP: Mermaid data available:', !!extractedMermaidData);
-      if (extractedJsonData) {
-        console.log('🔍 POPUP: JSON data preview:', extractedJsonData.substring(0, 100) + '...');
-      }
+      console.log('POPUP: Loading data from storage for chatId:', chatId);
+      console.log('POPUP: JSON data available:', !!extractedJsonData);
+      console.log('POPUP: Mermaid data available:', !!extractedMermaidData);
       if (extractedMermaidData) {
         console.log('POPUP: Mermaid data preview:', extractedMermaidData.substring(0, 100) + '...');
       }
@@ -433,39 +403,24 @@ document.addEventListener('DOMContentLoaded', () => {
       if (extractedJsonData) {
         try {
           const json = JSON.parse(extractedJsonData);
-          console.log('🔍 POPUP: Parsed JSON structure:', {
-            hasType: !!json.type,
-            type: json.type,
-            hasActions: !!json.actions,
-            actionsLength: json.actions ? json.actions.length : 0
-          });
-          
           if (json && json.type === 'gitGraph' && Array.isArray(json.actions)) {
             const names = new Set();
             json.actions.forEach(action => {
               if (action && action.type === 'commit' && action.branch_hint) {
                 names.add(String(action.branch_hint).trim());
-                console.log('🔍 POPUP: Found branch from commit:', action.branch_hint);
               }
               if (action && action.type === 'branch' && action.name) {
                 names.add(String(action.name).trim());
-                console.log('🔍 POPUP: Found branch from branch action:', action.name);
               }
             });
             branchNames = Array.from(names).filter(n => n && n.toLowerCase() !== 'gitgraph');
-            console.log('🔍 POPUP: Final branch names extracted:', branchNames);
-          } else {
-            console.error('🔍 POPUP: Invalid JSON structure for branch extraction');
           }
         } catch (e) {
           console.error('Failed to parse structured JSON for branch list:', e);
         }
-      } else {
-        console.log('🔍 POPUP: No extractedJsonData available for branch extraction');
       }
 
       if (branchNames.length > 0) {
-        console.log('AUTO-LOAD: Loading branch selector with', branchNames.length, 'branches (from JSON)');
         populateBranchSelector(branchNames);
         filteringView.classList.remove('hidden');
         dataManagementSection.classList.remove('hidden');
@@ -474,11 +429,6 @@ document.addEventListener('DOMContentLoaded', () => {
       // If we have branch data, always show the visualization section
       // (even if no JSON/Mermaid data yet - user can generate it)
       if (extractedJsonData || extractedMermaidData || storageData[keys.branchMap]) {
-        console.log('AUTO-LOAD: Showing visualization section:', {
-          hasBranches: branchNames.length > 0,
-          hasJson: !!extractedJsonData,
-          hasMermaid: !!extractedMermaidData
-        });
         
         mermaidSection.classList.remove('hidden');
         // dataManagementSection already shown above if we have branch data
@@ -496,7 +446,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadAnalysisDataFromPage() {
       // Use the existing load analysis button logic but without user interaction
-      console.log('AUTO-LOAD: Triggering page data load');
       
       sendMessageToContentScript({ action: 'loadAnalysis' }, () => {
         sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
@@ -512,7 +461,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ], (result) => {
               // Use the same loading logic as loadDataFromStorage
               loadDataFromStorage(result, response.chatId);
-              console.log('AUTO-LOAD: Page data loaded successfully with full context');
             });
           }
         });
@@ -526,19 +474,11 @@ document.addEventListener('DOMContentLoaded', () => {
     dataTimestamp.textContent = '';
     // Show the analyze button when no data is available
     analyzeButton.style.display = 'block';
-    console.log('AUTO-LOAD: All data sections hidden - no data available');
   }
 
-  function getCurrentChatId() {
-    // This is a helper function to get the current chat ID
-    // Since we're in popup context, we need to ask the content script
-    // For now, return null - the actual ID will be obtained via content script
-    return null;
-  }
 
   function calculateBranchInfo(branchNames, branchMap, chatHistory) {
     const branches = [];
-    const messageCount = Object.keys(branchMap).length;
     
     // Determine main branch (most common branch name)
     const branchCounts = {};
@@ -604,10 +544,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function sortBranchesGitStyle(branches) {
-    console.log('BRANCH SORTING DEBUG:');
-    branches.forEach(branch => {
-      console.log(`Branch: "${branch.name}", isMain: ${branch.isMain}, lastPosition: ${branch.lastPosition}, messageCount: ${branch.messageCount}`);
-    });
     
     const sorted = branches.sort((a, b) => {
       // Main branch first
@@ -618,10 +554,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return b.lastPosition - a.lastPosition;
     });
     
-    console.log('SORTED ORDER:');
-    sorted.forEach((branch, index) => {
-      console.log(`${index + 1}. "${branch.name}" (lastPosition: ${branch.lastPosition})`);
-    });
     
     return sorted;
   }
@@ -645,8 +577,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function populateBranchSelector(branchNames) {
-    console.log('🔍 POPULATE BRANCH SELECTOR called with:', branchNames);
-    console.log('🔍 POPUP: Branch names count:', branchNames.length);
     branchSelector.innerHTML = ''; // Clear the list
 
     // Add default option
@@ -664,27 +594,14 @@ document.addEventListener('DOMContentLoaded', () => {
           const chatHistory = result[keys.chatHistory];
           const savedBranch = result[keys.selectedBranch];
           
-          console.log('🔍 POPUP: populateBranchSelector storage result:', {
-            branchMapExists: !!branchMap,
-            branchMapType: typeof branchMap,
-            branchMapSize: branchMap ? Object.keys(branchMap).length : 0,
-            chatHistoryExists: !!chatHistory,
-            chatHistoryType: typeof chatHistory,
-            chatHistoryLength: chatHistory ? chatHistory.length : 0,
-            savedBranch,
-            allStorageKeys: Object.keys(result)
-          });
           
           if (branchMap && chatHistory) {
-            console.log('USING GIT-STYLE SORTING with branch map and chat history');
             const branchInfo = calculateBranchInfo(branchNames, branchMap, chatHistory);
             
             // Sort branches by git-style priority (main first, then by activity)
             const sortedBranches = sortBranchesGitStyle(branchInfo);
             
-            console.log('ADDING OPTIONS TO DROPDOWN IN THIS ORDER:');
             sortedBranches.forEach((branch, index) => {
-              console.log(`Adding option ${index + 1}: "${branch.name}"`);
               const option = document.createElement('option');
               option.value = branch.name;
               option.textContent = formatBranchOption(branch);
@@ -926,7 +843,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Load Analysis button event listener removed - now handled automatically by auto-loading
 
   openBranchButton.addEventListener('click', () => {
     const selectedBranch = branchSelector.value;

@@ -1428,8 +1428,6 @@ function extractFirstBalancedJson(text) {
 
 // New function to load analysis from the last model message
 async function loadAnalysis(showAlerts = true) {
-  console.log("CS: ===== LOAD ANALYSIS START =====");
-  console.log("CS: Loading analysis from last model message...");
   
   determinePageConfiguration();
   console.log("CS: Page config determined:", pageConfig);
@@ -1543,7 +1541,6 @@ async function loadAnalysis(showAlerts = true) {
     });
     // Notify popup to auto-reload
     safeSendToPopup({ action: 'analysisCompleted', chatId });
-    console.log('CS: ===== LOAD ANALYSIS SUCCESS (DOM-first) =====');
     return { hasJsonData: !!storageData[`json_data_${chatId}`], hasMermaidData: !!storageData[`mermaid_diagram_${chatId}`] };
   } else {
     console.log('CS: INFO - No artifacts extracted from DOM in loadAnalysis');
@@ -1552,8 +1549,6 @@ async function loadAnalysis(showAlerts = true) {
 }
 
 async function openFilteredBranch(branchName) {
-  console.log("CS: ===== OPEN FILTERED THREAD START =====");
-  console.log("CS: Thread name:", branchName);
   
   // Use current chat ID for this page
   const chatId = getCurrentChatId();
@@ -1768,7 +1763,6 @@ async function openFilteredBranch(branchName) {
   // Use fallback method for content scripts
   copyToClipboardContentScript(finalContentForNewChat, branchName, threadInfo);
   
-  console.log("CS: ===== OPEN FILTERED THREAD END =====");
 }
 
 function copyToClipboardContentScript(text, branchName, threadInfo) {
@@ -1878,8 +1872,6 @@ function showManualCopyDialogContentScript(text, branchName, threadInfo) {
 }
 
 async function goToBranch(branchName) {
-  console.log("CS: ===== GO TO BRANCH START =====");
-  console.log("CS: Branch name:", branchName);
   
   // Use current chat ID for this page
   const chatId = getCurrentChatId();
@@ -1919,20 +1911,13 @@ async function goToBranch(branchName) {
     return;
   }
   
-  console.log("CS: === STORAGE DATA DEBUG ===");
-  console.log("CS: Thread Map:", branchMap);
-  console.log("CS: Chat History length:", chatHistory.length);
-  console.log("CS: First 3 chat history entries:", chatHistory.slice(0, 3));
-  console.log("CS: Last 3 chat history entries:", chatHistory.slice(-3));
   
-  console.log("CS: Looking for branch name:", branchName);
   
   // Find the last message in this branch
   let lastMessageInThread = null;
   let lastTurnId = null;
   let lastMessageNumber = null;
   
-  console.log("CS: === SEARCHING FOR BRANCH ===");
   // Iterate over existing keys only, sorted descending numerically, to avoid undefined gaps
   const sortedMessageNums = Object.keys(branchMap)
     .map(k => parseInt(k, 10))
@@ -1989,7 +1974,6 @@ async function goToBranch(branchName) {
     console.log(`CS: Found ${allTurns.length} total turns on page`);
     
     // Log all turn IDs on the page for debugging
-    console.log("CS: === ALL TURN IDs ON PAGE ===");
     allTurns.forEach((turn, index) => {
       console.log(`CS: Turn ${index}: ID="${turn.id}"`);
     });
@@ -2022,7 +2006,6 @@ async function goToBranch(branchName) {
     return;
   }
   
-  console.log("CS: === ATTEMPTING NAVIGATION ===");
   console.log("CS: Target turn ID:", lastTurnId);
   
   // Find the turn element on the page and scroll to it
@@ -2070,7 +2053,6 @@ async function goToBranch(branchName) {
     console.error("CS: This indicates the stored turnId doesn't match actual DOM elements");
   }
   
-  console.log("CS: ===== GO TO BRANCH END =====");
 }
 
 function insertPrompt(text) {
