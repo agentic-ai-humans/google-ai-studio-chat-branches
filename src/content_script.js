@@ -1608,21 +1608,8 @@ async function openFilteredBranch(branchName) {
 }
 
 function copyToClipboardContentScript(text, branchName, threadInfo) {
-  // Try modern clipboard API first (with focus attempt)
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => {
-    }).catch(err => {
-      fallbackCopyContentScript(text, branchName, threadInfo);
-    });
-  } else {
-    // Fallback for browsers without clipboard API
-    fallbackCopyContentScript(text, branchName, threadInfo);
-  }
-}
-
-function fallbackCopyContentScript(text, branchName, threadInfo) {
+  // Use the most reliable method - create textarea and copy
   try {
-    // Create a temporary textarea element
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
@@ -1633,19 +1620,21 @@ function fallbackCopyContentScript(text, branchName, threadInfo) {
     textArea.focus();
     textArea.select();
     
-    // Try to copy using execCommand (legacy method)
     const successful = document.execCommand('copy');
     document.body.removeChild(textArea);
     
     if (successful) {
-    } else {
-      throw new Error('execCommand copy failed');
+      // Success - content copied
+      return;
     }
   } catch (err) {
-    // Show manual copy dialog as last resort
-    showManualCopyDialogContentScript(text, branchName, threadInfo);
+    // Fall through to manual copy dialog
   }
+  
+  // If copy failed, show manual copy dialog
+  showManualCopyDialogContentScript(text, branchName, threadInfo);
 }
+
 
 function showManualCopyDialogContentScript(text, branchName, threadInfo) {
   // Create a modal with selectable text for manual copy
