@@ -569,8 +569,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Determine main branch (most common branch name)
     const branchCounts = {};
     Object.values(branchMap).forEach(item => {
-      const branch = typeof item === 'string' ? item : item.thread;
-      branchCounts[branch] = (branchCounts[branch] || 0) + 1;
+      const branch = item ? item.thread : null;
+      if (branch) {
+        branchCounts[branch] = (branchCounts[branch] || 0) + 1;
+      }
     });
     const mainBranch = Object.keys(branchCounts).reduce((a, b) => branchCounts[a] > branchCounts[b] ? a : b);
     
@@ -605,7 +607,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Find the last message in this branch
     for (let i = chatHistory.length - 1; i >= 0; i--) {
       const messageNum = i + 1;
-      if (branchMap[messageNum] === branchName) {
+      const messageThreadData = branchMap[messageNum];
+      // Extract thread name from the stored object { thread: "...", turnId: "..." }
+      const messageThread = messageThreadData ? messageThreadData.thread : null;
+      if (messageThread === branchName) {
         return chatHistory[i];
       }
     }
@@ -616,7 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const positions = [];
     Object.keys(branchMap).forEach(messageNum => {
       const item = branchMap[messageNum];
-      const branch = typeof item === 'string' ? item : item.thread;
+      const branch = item ? item.thread : null;
       if (branch === branchName) {
         positions.push(parseInt(messageNum));
       }

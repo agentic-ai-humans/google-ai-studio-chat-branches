@@ -1558,7 +1558,9 @@ async function openFilteredBranch(branchName) {
   // Find all messages that belong to this thread
   const chatHistory = data[`chat_history_${chatId}`];
   const threadMessages = chatHistory.filter(message => {
-    const messageThread = branchMap[String(message.id)];
+    const messageThreadData = branchMap[String(message.id)];
+    // Extract thread name from the stored object { thread: "...", turnId: "..." }
+    const messageThread = messageThreadData ? messageThreadData.thread : null;
     console.log(`CS: Message ${message.id} -> thread "${messageThread}" (looking for "${branchName}")`);
     return messageThread === branchName;
   });
