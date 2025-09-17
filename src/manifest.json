@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Google AI Studio Chat Threads",
-  "version": "3.0.0",
+  "version": "3.1.1",
   "description": "Analyzes chat history to generate a thread graph and allows filtering by topic.",
   "permissions": [
     "storage",
