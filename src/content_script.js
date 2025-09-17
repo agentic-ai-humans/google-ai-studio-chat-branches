@@ -1607,8 +1607,17 @@ async function openFilteredBranch(branchName) {
   
 }
 
-function copyToClipboardContentScript(text, branchName, threadInfo) {
-  // Use the most reliable method - create textarea and copy
+async function copyToClipboardContentScript(text, branchName, threadInfo) {
+  // Try modern clipboard API first
+  try {
+    await navigator.clipboard.writeText(text);
+    console.log(`Branch "${branchName}" copied to clipboard`);
+    return;
+  } catch (err) {
+    // Modern API failed, try legacy method
+  }
+  
+  // Fallback to execCommand
   try {
     const textArea = document.createElement('textarea');
     textArea.value = text;
@@ -1624,15 +1633,14 @@ function copyToClipboardContentScript(text, branchName, threadInfo) {
     document.body.removeChild(textArea);
     
     if (successful) {
-      // Success - content copied
+      console.log(`Branch "${branchName}" copied to clipboard (fallback)`);
       return;
     }
   } catch (err) {
-    // Fall through to manual copy dialog
+    // Both methods failed
   }
   
-  // If copy failed, show manual copy dialog
-  showManualCopyDialogContentScript(text, branchName, threadInfo);
+  console.error(`Failed to copy branch "${branchName}" to clipboard`);
 }
 
 
