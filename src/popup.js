@@ -525,20 +525,17 @@ document.addEventListener('DOMContentLoaded', () => {
       sendMessageToContentScript({ action: 'loadAnalysis' }, () => {
         sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
           if (response && response.chatId) {
+            // Load ALL necessary data, not just JSON and Mermaid
             chrome.storage.local.get([
+              `branch_map_${response.chatId}`,
+              `chat_history_${response.chatId}`,
               `json_data_${response.chatId}`,
-              `mermaid_diagram_${response.chatId}`
+              `mermaid_diagram_${response.chatId}`,
+              `data_created_${response.chatId}`
             ], (result) => {
-              extractedJsonData = result[`json_data_${response.chatId}`] || null;
-              extractedMermaidData = result[`mermaid_diagram_${response.chatId}`] || null;
-              
-              if (extractedJsonData || extractedMermaidData) {
-                mermaidSection.classList.remove('hidden');
-                dataManagementSection.classList.remove('hidden');
-                // Hide the analyze button when data is loaded
-                analyzeButton.style.display = 'none';
-                console.log('AUTO-LOAD: Page data loaded successfully');
-              }
+              // Use the same loading logic as loadDataFromStorage
+              loadDataFromStorage(result, response.chatId);
+              console.log('AUTO-LOAD: Page data loaded successfully with full context');
             });
           }
         });
