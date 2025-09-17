@@ -718,18 +718,23 @@ document.addEventListener('DOMContentLoaded', () => {
               console.log('Restored selected branch:', savedBranch);
             }
           } else {
-            // Fallback to simple format if no branch map available
-            branchNames.forEach(branchName => {
-      const option = document.createElement('option');
-              option.value = branchName;
-              option.textContent = branchName;
-              branchSelector.appendChild(option);
+            // FAIL FAST: Don't silently degrade functionality
+            console.error('CRITICAL ERROR: Branch data missing!', {
+              hasBranchNames: branchNames.length > 0,
+              hasBranchMap: !!branchMap,
+              hasChatHistory: !!chatHistory,
+              storageKeys: Object.keys(result),
+              expectedKeys: [keys.branchMap, keys.chatHistory]
             });
             
-            if (savedBranch && branchNames.includes(savedBranch)) {
-              branchSelector.value = savedBranch;
-              console.log('Restored selected branch:', savedBranch);
-            }
+            // Show error to user instead of broken functionality
+            const errorOption = document.createElement('option');
+            errorOption.value = '';
+            errorOption.textContent = '❌ Error: Branch data missing - please re-run analysis';
+            errorOption.style.color = '#e74c3c';
+            branchSelector.appendChild(errorOption);
+            
+            console.error('Branch selector degraded to error state - Go to Branch will not work');
           }
         });
       }

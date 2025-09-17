@@ -825,6 +825,14 @@ async function climbAndScrapeHistory() {
                     console.log(`CS: Detected role for turn ${turnId}: ${role}`);
                     console.log(`CS: Adding ${role} message with full content`);
                     
+                    // Validate critical data before storing
+                    if (!content.richContent && !content.textContent) {
+                        console.warn(`CS: Message ${turnIndex} has no content - this may cause issues`);
+                    }
+                    if (!turnId) {
+                        console.error(`CS: CRITICAL - Message ${turnIndex} missing turnId - Go to Branch will fail!`);
+                    }
+                    
                     scrapedHistory.push({ 
                         role: role, 
                         richContent: content.richContent,
@@ -1252,7 +1260,16 @@ function watchForAnalysisResponse(scrapedHistory) {
                   if (action && action.type === 'commit' && action.id) {
                     const turnId = String(action.id);
                     const branchName = String(action.branch_hint || action.branch || '').trim();
-                    if (!branchName) return;
+                    if (!branchName) {
+                      console.error(`CS: CRITICAL - Commit action missing branch name!`, {
+                        actionId: action.id,
+                        actionType: action.type,
+                        branchHint: action.branch_hint,
+                        branch: action.branch,
+                        fullAction: action
+                      });
+                      return;
+                    }
                     const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
                     if (idx !== -1) {
                       const messageNum = idx + 1;
@@ -1382,7 +1399,14 @@ function extractJsonAndMermaidFromDom(turnRoot) {
         if (!result.json) {
           const json = extractFirstBalancedJson(raw);
           if (json) {
-            try { JSON.parse(json); result.json = json; console.log(`CS: Fallback - extracted JSON from raw block ${i+1}`); } catch (_) {}
+            try { 
+              JSON.parse(json); 
+              result.json = json; 
+              console.log(`CS: Fallback - extracted JSON from raw block ${i+1}`); 
+            } catch (parseError) {
+              console.error(`CS: CRITICAL - Invalid JSON in raw block ${i+1}:`, parseError.message);
+              console.error(`CS: Problematic JSON preview:`, json.substring(0, 200) + '...');
+            }
           }
         }
         if (!result.mermaid && raw.includes('gitGraph')) {
@@ -1482,14 +1506,33 @@ async function loadAnalysis(showAlerts = true) {
     storageData[`json_data_${chatId}`] = domExtract.json;
     try {
       const stored = await chrome.storage.local.get([`chat_history_${chatId}`]);
-      const chatHistory = stored[`chat_history_${chatId}`] || [];
+      const chatHistory = stored[`chat_history_${chatId}`];
+      
+      if (!chatHistory || !Array.isArray(chatHistory)) {
+        console.error('CS: CRITICAL - Chat history missing or invalid!', {
+          chatId,
+          chatHistoryExists: !!chatHistory,
+          chatHistoryType: typeof chatHistory,
+          storageKeys: Object.keys(stored)
+        });
+        return { hasJsonData: false, hasMermaidData: false };
+      }
       const gitGraph = JSON.parse(domExtract.json);
       if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
         gitGraph.actions.forEach(action => {
           if (action && action.type === 'commit' && action.id) {
             const turnId = String(action.id);
             const branchName = String(action.branch_hint || action.branch || '').trim();
-            if (!branchName) return;
+            if (!branchName) {
+              console.error(`CS: CRITICAL - Commit action missing branch name in loadAnalysis!`, {
+                actionId: action.id,
+                actionType: action.type,
+                branchHint: action.branch_hint,
+                branch: action.branch,
+                fullAction: action
+              });
+              return;
+            }
             const idx = chatHistory.findIndex(m => m.turnId === turnId);
             if (idx !== -1) {
               const messageNum = idx + 1;
@@ -1545,22 +1588,56 @@ async function openFilteredBranch(branchName) {
   console.log("CS: Chat history length:", data[`chat_history_${chatId}`] ? data[`chat_history_${chatId}`].length : 0);
   console.log("CS: Thread map exists:", !!data[`branch_map_${chatId}`]);
   
-  if (!data[`chat_history_${chatId}`] || !data[`branch_map_${chatId}`]) {
-    console.log("CS: ERROR - Missing data");
-    console.error("CS: No analysis data found for this chat");
+  const branchMap = data[`branch_map_${chatId}`];
+  const chatHistory = data[`chat_history_${chatId}`];
+  
+  // FAIL FAST: Validate required data exists
+  if (!chatHistory || !Array.isArray(chatHistory)) {
+    console.error("CS: CRITICAL - Chat history missing or invalid!", {
+      chatId,
+      chatHistoryExists: !!chatHistory,
+      chatHistoryType: typeof chatHistory,
+      chatHistoryLength: chatHistory ? chatHistory.length : 'N/A'
+    });
     return;
   }
   
-  const branchMap = data[`branch_map_${chatId}`];
+  if (!branchMap || typeof branchMap !== 'object') {
+    console.error("CS: CRITICAL - Branch map missing or invalid!", {
+      chatId,
+      branchMapExists: !!branchMap,
+      branchMapType: typeof branchMap,
+      branchMapKeys: branchMap ? Object.keys(branchMap).length : 'N/A'
+    });
+    return;
+  }
+  
   console.log("CS: Thread map:", branchMap);
   console.log("CS: Looking for thread name:", branchName);
-  
-  // Find all messages that belong to this thread
-  const chatHistory = data[`chat_history_${chatId}`];
   const threadMessages = chatHistory.filter(message => {
     const messageThreadData = branchMap[String(message.id)];
+    
+    // FAIL FAST: Validate thread data structure
+    if (messageThreadData && typeof messageThreadData !== 'object') {
+      console.error(`CS: CRITICAL - Invalid thread data format for message ${message.id}!`, {
+        messageId: message.id,
+        threadDataType: typeof messageThreadData,
+        threadData: messageThreadData,
+        expectedFormat: '{ thread: "...", turnId: "..." }'
+      });
+      return false;
+    }
+    
     // Extract thread name from the stored object { thread: "...", turnId: "..." }
     const messageThread = messageThreadData ? messageThreadData.thread : null;
+    
+    if (messageThreadData && !messageThread) {
+      console.error(`CS: CRITICAL - Thread data missing thread property for message ${message.id}!`, {
+        messageId: message.id,
+        threadData: messageThreadData
+      });
+    }
+    
     console.log(`CS: Message ${message.id} -> thread "${messageThread}" (looking for "${branchName}")`);
     return messageThread === branchName;
   });
@@ -1814,13 +1891,31 @@ async function goToBranch(branchName) {
   console.log("CS: Getting data from storage...");
   const data = await chrome.storage.local.get([`chat_history_${chatId}`, `branch_map_${chatId}`]);
   
-  if (!data[`chat_history_${chatId}`] || !data[`branch_map_${chatId}`]) {
-    console.log("CS: ERROR - No analysis data found for this chat");
+  const branchMap = data[`branch_map_${chatId}`];
+  const chatHistory = data[`chat_history_${chatId}`];
+  
+  // FAIL FAST: Validate required data exists
+  if (!chatHistory || !Array.isArray(chatHistory)) {
+    console.error("CS: CRITICAL - Chat history missing for branch navigation!", {
+      chatId,
+      branchName,
+      chatHistoryExists: !!chatHistory,
+      chatHistoryType: typeof chatHistory,
+      storageKeys: Object.keys(data)
+    });
     return;
   }
   
-  const branchMap = data[`branch_map_${chatId}`];
-  const chatHistory = data[`chat_history_${chatId}`];
+  if (!branchMap || typeof branchMap !== 'object') {
+    console.error("CS: CRITICAL - Branch map missing for branch navigation!", {
+      chatId,
+      branchName,
+      branchMapExists: !!branchMap,
+      branchMapType: typeof branchMap,
+      storageKeys: Object.keys(data)
+    });
+    return;
+  }
   
   console.log("CS: === STORAGE DATA DEBUG ===");
   console.log("CS: Thread Map:", branchMap);
