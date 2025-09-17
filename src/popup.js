@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const messageProgress = document.getElementById('messageProgress');
   const cancelAnalysisButton = document.getElementById('cancelAnalysisButton');
   const mainControls = document.getElementById('mainControls');
-  // loadSection removed - analysis now loads automatically
   
   const scrollToBottomButton = document.getElementById('scrollToBottomButton');
   const analyzeButton = document.getElementById('analyzeButton');
@@ -42,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
     messageProgress: !!messageProgress,
     cancelAnalysisButton: !!cancelAnalysisButton,
     mainControls: !!mainControls,
-    // loadSection removed
     filteringView: !!filteringView,
     incorrectDomainView: !!incorrectDomainView,
     scrollToBottomButton: !!scrollToBottomButton,
@@ -83,15 +81,10 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('ERROR: mainControls element not found!');
       return;
     }
-    if (!loadSection) {
-      console.error('ERROR: loadSection element not found!');
-      return;
-    }
     
     console.log('All elements found, updating classes...');
     progressIndicator.classList.remove('hidden');
     mainControls.classList.add('hidden');
-    loadSection.classList.add('hidden');
     
     console.log('progressIndicator classList after removing hidden:', Array.from(progressIndicator.classList));
     console.log('mainControls classList after adding hidden:', Array.from(mainControls.classList));
@@ -109,7 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
     analysisInProgress = false;
     progressIndicator.classList.add('hidden');
     mainControls.classList.remove('hidden');
-    loadSection.classList.remove('hidden');
   }
 
   function updateProgressCounter(count) {
@@ -308,6 +300,21 @@ document.addEventListener('DOMContentLoaded', () => {
     textarea.select();
   }
 
+  // --- STORAGE KEY CONSTANTS ---
+  function getStorageKeys(chatId) {
+    return {
+      branchMap: `branch_map_${chatId}`,
+      chatHistory: `chat_history_${chatId}`,
+      jsonData: `json_data_${chatId}`,
+      mermaidDiagram: `mermaid_diagram_${chatId}`,
+      analysisCompleted: `analysis_completed_${chatId}`,
+      dataCreated: `data_created_${chatId}`,
+      dataCleared: `data_cleared_${chatId}`,
+      selectedBranch: `selected_branch_${chatId}`,
+      currentChatId: 'current_chat_id'
+    };
+  }
+
   // --- Główna funkcja inicjująca ---
   function initializePopup() {
     console.log('Initializing popup...');
@@ -390,21 +397,22 @@ document.addEventListener('DOMContentLoaded', () => {
       isLoadingData = true;
       console.log('AUTO-LOAD: Checking for available data for chat:', chatId);
       
-      // Check storage data first
+      // Check storage data first using standardized keys
+      const keys = getStorageKeys(chatId);
       chrome.storage.local.get([
-        `branch_map_${chatId}`,
-        `json_data_${chatId}`,
-        `mermaid_diagram_${chatId}`,
-        `data_created_${chatId}`,
-        `data_cleared_${chatId}`
+        keys.branchMap,
+        keys.jsonData,
+        keys.mermaidDiagram,
+        keys.dataCreated,
+        keys.dataCleared
       ], (storageData) => {
         console.log('AUTO-LOAD: Storage data keys found:', Object.keys(storageData));
         
-        const hasStoredBranchMap = !!storageData[`branch_map_${chatId}`];
-        const hasStoredJsonData = !!storageData[`json_data_${chatId}`];
-        const hasStoredMermaidData = !!storageData[`mermaid_diagram_${chatId}`];
-        const hasStoredTimestamp = !!storageData[`data_created_${chatId}`];
-        const dataWasCleared = !!storageData[`data_cleared_${chatId}`];
+        const hasStoredBranchMap = !!storageData[keys.branchMap];
+        const hasStoredJsonData = !!storageData[keys.jsonData];
+        const hasStoredMermaidData = !!storageData[keys.mermaidDiagram];
+        const hasStoredTimestamp = !!storageData[keys.dataCreated];
+        const dataWasCleared = !!storageData[keys.dataCleared];
         
         console.log('AUTO-LOAD: Storage availability:', {
           branchMap: hasStoredBranchMap,
@@ -526,12 +534,13 @@ document.addEventListener('DOMContentLoaded', () => {
         sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
           if (response && response.chatId) {
             // Load ALL necessary data, not just JSON and Mermaid
+            const keys = getStorageKeys(response.chatId);
             chrome.storage.local.get([
-              `branch_map_${response.chatId}`,
-              `chat_history_${response.chatId}`,
-              `json_data_${response.chatId}`,
-              `mermaid_diagram_${response.chatId}`,
-              `data_created_${response.chatId}`
+              keys.branchMap,
+              keys.chatHistory,
+              keys.jsonData,
+              keys.mermaidDiagram,
+              keys.dataCreated
             ], (result) => {
               // Use the same loading logic as loadDataFromStorage
               loadDataFromStorage(result, response.chatId);
