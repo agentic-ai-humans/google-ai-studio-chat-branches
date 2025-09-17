@@ -966,20 +966,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedBranch = branchSelector.value;
     if (selectedBranch) {
       sendMessageToContentScript({ action: 'openBranchInNewChat', branchName: selectedBranch }, () => {
-        // Get current chat info and clear only that chat's data after use
-        sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
-          if (response && response.chatId) {
-            chrome.storage.local.remove([
-              `chat_history_${response.chatId}`, 
-              `branch_map_${response.chatId}`, 
-              `analysis_completed_${response.chatId}`, 
-              `data_created_${response.chatId}`, 
-              'current_chat_id'
-            ]);
-          }
-          // Close popup after successful branch opening with a small delay
-          setTimeout(() => window.close(), 500);
-        });
+        console.log('Branch copied to clipboard successfully');
+        // DON'T delete data - user might want to copy other branches or use Go to Branch
+        // Data should persist until user manually clears it or runs new analysis
+        
+        // Close popup after successful branch copying with a small delay
+        setTimeout(() => window.close(), 500);
       });
     }
   });
