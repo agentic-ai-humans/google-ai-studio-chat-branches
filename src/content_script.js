@@ -1718,13 +1718,10 @@ async function goToBranch(branchName) {
   // Get analysis data from DOM instead of storage
   const analysis = getLatestAnalysisFromDom();
   if (!analysis || !analysis.branchMap) {
-    console.log('No analysis data found in DOM for branch navigation');
     return;
   }
   
   const branchMap = analysis.branchMap;
-  console.log('Branch map:', branchMap);
-  console.log('Looking for branch:', branchName);
   
   // Find the last message in this branch by checking all turnIds
   let lastTurnId = null;
@@ -1749,15 +1746,26 @@ async function goToBranch(branchName) {
   }
   
   if (!lastTurnId || !lastTurnElement) {
-    console.log(`No turn found for branch: ${branchName}`);
     return;
   }
-  // Scroll to the found turn element
+  // Scroll to the found turn element with more aggressive scrolling
   lastTurnElement.scrollIntoView({ 
     behavior: 'smooth', 
     block: 'center',
     inline: 'nearest'
   });
+  
+  // Ensure we actually get to the right place with additional scroll
+  setTimeout(() => {
+    const rect = lastTurnElement.getBoundingClientRect();
+    const elementTop = rect.top + window.pageYOffset;
+    const offset = window.innerHeight / 2;
+    
+    window.scrollTo({
+      top: elementTop - offset,
+      behavior: 'smooth'
+    });
+  }, 100);
   
   // Add a visual highlight effect
   lastTurnElement.style.transition = 'background-color 0.3s ease';
@@ -1766,7 +1774,6 @@ async function goToBranch(branchName) {
     lastTurnElement.style.backgroundColor = '';
   }, 2000);
   
-  console.log(`Navigated to branch "${branchName}" at turn: ${lastTurnId}`);
   
 }
 
