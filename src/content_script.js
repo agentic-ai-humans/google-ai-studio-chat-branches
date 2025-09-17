@@ -1707,74 +1707,72 @@ function showManualCopyDialogContentScript(text, branchName, threadInfo) {
 }
 
 async function goToBranch(branchName) {
-  
-  // Use current chat ID for this page
   const chatId = getCurrentChatId();
+  if (!chatId) return;
   
-  if (!chatId) {
-    return;
-  }
-  
-  // Get analysis data from DOM instead of storage
   const analysis = getLatestAnalysisFromDom();
-  if (!analysis || !analysis.branchMap) {
-    return;
-  }
+  if (!analysis || !analysis.branchMap) return;
   
-  const branchMap = analysis.branchMap;
+  // Step 1: Try to find turn-IDs from analysis that exist in current DOM
+  const branchTurnIds = Object.keys(analysis.branchMap)
+    .filter(turnId => analysis.branchMap[turnId].thread === branchName)
+    .reverse(); // Start with newest first
   
-  // Find the last message in this branch by checking all turnIds
-  let lastTurnId = null;
-  let lastTurnElement = null;
-  
-  // Get all turn elements on the page
-  const allTurns = document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn');
-  
-  // Go through turns from newest to oldest to find the last message in this branch
-  for (let i = allTurns.length - 1; i >= 0; i--) {
-    const turnElement = allTurns[i];
-    const turnId = turnElement.id;
-    
-    if (turnId && branchMap[turnId]) {
-      const threadData = branchMap[turnId];
-      if (threadData && threadData.thread === branchName) {
-        lastTurnId = turnId;
-        lastTurnElement = turnElement;
-        break;
-      }
+  // Try direct navigation first
+  for (const turnId of branchTurnIds) {
+    const turnElement = document.getElementById(turnId);
+    if (turnElement) {
+      // Found it! Navigate directly
+      turnElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center',
+        inline: 'nearest'
+      });
+      
+      turnElement.style.transition = 'background-color 0.3s ease';
+      turnElement.style.backgroundColor = '#fff3cd';
+      setTimeout(() => {
+        turnElement.style.backgroundColor = '';
+      }, 2000);
+      return; // Success, no need to climb
     }
   }
   
-  if (!lastTurnId || !lastTurnElement) {
-    return;
-  }
-  // Scroll to the found turn element with more aggressive scrolling
-  lastTurnElement.scrollIntoView({ 
-    behavior: 'smooth', 
-    block: 'center',
-    inline: 'nearest'
+  // Step 2: If not found in current view, climb to find it
+  // TODO: Implement targeted climbing that stops when target is found
+  // For now, fall back to full scrape approach
+  const scrapedHistory = await climbAndScrapeHistory();
+  if (scrapedHistory.length === 0) return;
+  
+  const { processedHistory } = processScrapedHistory(scrapedHistory, {
+    includeInPrompt: false,
+    sendProgress: false,
+    checkCancellation: false
   });
   
-  // Ensure we actually get to the right place with additional scroll
-  setTimeout(() => {
-    const rect = lastTurnElement.getBoundingClientRect();
-    const elementTop = rect.top + window.pageYOffset;
-    const offset = window.innerHeight / 2;
-    
-    window.scrollTo({
-      top: elementTop - offset,
-      behavior: 'smooth'
+  const threadMessages = processedHistory.filter(message => {
+    const messageThreadData = analysis.branchMap[message.turnId];
+    return messageThreadData && messageThreadData.thread === branchName;
+  });
+  
+  if (threadMessages.length === 0) return;
+  
+  const lastMessage = threadMessages[threadMessages.length - 1];
+  const turnElement = document.getElementById(lastMessage.turnId);
+  
+  if (turnElement) {
+    turnElement.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center',
+      inline: 'nearest'
     });
-  }, 100);
-  
-  // Add a visual highlight effect
-  lastTurnElement.style.transition = 'background-color 0.3s ease';
-  lastTurnElement.style.backgroundColor = '#fff3cd';
-  setTimeout(() => {
-    lastTurnElement.style.backgroundColor = '';
-  }, 2000);
-  
-  
+    
+    turnElement.style.transition = 'background-color 0.3s ease';
+    turnElement.style.backgroundColor = '#fff3cd';
+    setTimeout(() => {
+      turnElement.style.backgroundColor = '';
+    }, 2000);
+  }
 }
 
 function insertPrompt(text) {
