@@ -135,7 +135,7 @@ function determinePageConfiguration() {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.action) {
     case 'getCurrentChatInfo':
-      // Return current chat ID and check if data exists for this chat
+      // Return current chat ID and check if analysis exists
       const currentChatId = getCurrentChatId();
       
       // Handle new_chat pages that don't have a real chat ID
@@ -144,21 +144,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           chatId: null,
           hasAnalysis: false,
           timestamp: null,
-          isNewChat: true
+          isNewChat: true,
+          analysisTurnFound: false
         });
         return true;
       }
       
+      // Check for stored analysis turn-id
       chrome.storage.local.get([
-        `branch_map_${currentChatId}`, 
-        `analysis_completed_${currentChatId}`, 
-        `data_created_${currentChatId}`
+        `analysis_turn_${currentChatId}`,
+        `analysis_completed_${currentChatId}`
       ], (data) => {
+        const storedTurnId = data[`analysis_turn_${currentChatId}`];
+        const timestamp = data[`analysis_completed_${currentChatId}`];
+        
+        let analysisTurnFound = false;
+        let hasVisibleAnalysis = false;
+        
+        // If we have a stored turn-id, check if it exists on the page
+        if (storedTurnId) {
+          const turnElement = document.getElementById(storedTurnId);
+          analysisTurnFound = !!turnElement;
+          
+          if (analysisTurnFound) {
+            // Verify it still contains analysis data
+            const domExtract = extractJsonAndMermaidFromDom(turnElement);
+            hasVisibleAnalysis = !!(domExtract && (domExtract.json || domExtract.mermaid));
+          }
+        }
+        
+        // Fallback: check DOM for any analysis if stored turn not found
+        if (!hasVisibleAnalysis) {
+          const analysis = getLatestAnalysisFromDom();
+          hasVisibleAnalysis = analysis && analysis.hasData;
+        }
+        
         sendResponse({
           chatId: currentChatId,
-          hasAnalysis: !!data[`analysis_completed_${currentChatId}`],
-          timestamp: data[`data_created_${currentChatId}`],
-          isNewChat: false
+          hasAnalysis: hasVisibleAnalysis,
+          timestamp: timestamp,
+          isNewChat: false,
+          analysisTurnFound: analysisTurnFound,
+          storedTurnId: storedTurnId
         });
       });
       return true; // Will respond asynchronously
@@ -185,6 +212,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       loadAnalysis(true); // true = show alerts (for manual user action)
       sendResponse({ status: 'ok' });
       break;
+    case 'getAnalysisData':
+      // Get analysis data from DOM for popup
+      const analysisData = getLatestAnalysisFromDom();
+      if (analysisData && analysisData.hasData) {
+        sendResponse({
+          status: 'ok',
+          hasData: true,
+          jsonData: analysisData.json,
+          mermaidData: analysisData.mermaid,
+          branchMap: analysisData.branchMap
+        });
+      } else {
+        sendResponse({
+          status: 'ok',
+          hasData: false
+        });
+      }
+      break;
     case 'openBranchInNewChat':
       if (request.branchName) {
         openFilteredBranch(request.branchName);
@@ -202,6 +247,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case 'cancelAnalysis':
       analysisCancelled = true;
       sendResponse({ status: 'cancelled' });
+      break;
+    case 'scrollToAnalysis':
+      // Scroll to stored analysis turn
+      const chatId = getCurrentChatId();
+      if (chatId) {
+        chrome.storage.local.get([`analysis_turn_${chatId}`], (data) => {
+          const turnId = data[`analysis_turn_${chatId}`];
+          if (turnId) {
+            const turnElement = document.getElementById(turnId);
+            if (turnElement) {
+              turnElement.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center',
+                inline: 'nearest'
+              });
+              
+              // Add highlight effect
+              turnElement.style.transition = 'background-color 0.3s ease';
+              turnElement.style.backgroundColor = '#fff3cd';
+              setTimeout(() => {
+                turnElement.style.backgroundColor = '';
+              }, 2000);
+              
+              sendResponse({ status: 'found' });
+            } else {
+              sendResponse({ status: 'not_found' });
+            }
+          } else {
+            sendResponse({ status: 'no_stored_turn' });
+          }
+        });
+      } else {
+        sendResponse({ status: 'no_chat_id' });
+      }
+      return true; // Will respond asynchronously
       break;
   }
   return true;
@@ -911,6 +991,110 @@ function sendAnalysisComplete() {
   safeSendToPopup({ action: 'analysisComplete' });
 }
 
+// Process scraped history into structured format - reusable by multiple functions
+function processScrapedHistory(scrapedHistory, options = {}) {
+  const { 
+    includeInPrompt = true, 
+    sendProgress = false,
+    checkCancellation = false 
+  } = options;
+  
+  const processedHistory = [];
+  let historyForPrompt = "";
+  let messageIndex = 0;
+
+  scrapedHistory.forEach((message, index) => {
+      // Check for cancellation if requested
+      if (checkCancellation && analysisCancelled) {
+        return;
+      }
+      
+      // Send progress update if requested
+      if (sendProgress) {
+        sendProgressUpdate(index + 1);
+      }
+      
+      // Check if this is an analysis prompt
+      const isAnalysisPrompt = message.textContent.includes("You are a conversation analysis AI") || 
+                               message.textContent.includes("[CHAT HISTORY TO ANALYZE]") ||
+                               message.textContent.includes("CHAT HISTORY TO ANALYZE") ||
+                               message.textContent.includes("conversation analysis") ||
+                               message.textContent.includes("analyze the chat history") ||
+                               message.textContent.includes("provide two outputs: a JSON map of threads") ||
+                               message.textContent.includes("Mermaid git graph") ||
+                               message.textContent.includes("assign each message ID to a thematic thread") ||
+                               message.textContent.includes("Read the entire chat history provided below") ||
+                               (message.textContent.length > 5000 && message.role === "User"); // Very long user messages are likely analysis prompts
+      
+      // Check if this contains thinking/reasoning content (should be completely skipped)
+      const isThinkingContent = message.textContent.includes("Assessing Input Nuance") ||
+                               message.textContent.includes("Analyzing Contextual Implications") ||
+                               message.textContent.includes("Decoding the User's Intent") ||
+                               message.textContent.includes("Formulating the Response") ||
+                               message.textContent.includes("Expand to view model thoughts") ||
+                               message.textContent.includes("(experimental)") ||
+                               message.textContent.includes("Thoughts");
+      
+      // Skip thinking content entirely (don't include in message count)
+      if (isThinkingContent) {
+        return;
+      }
+      
+      messageIndex++; // Only increment for non-thinking content
+      
+      // For analysis prompts, replace content with placeholder but keep the message
+      if (isAnalysisPrompt) {
+        const placeholderText = "Chat history skipped because it was meant for the analysis prompt, no need to reflect to this content.";
+        
+        const processedMessage = { 
+          id: messageIndex, 
+          role: message.role, 
+          richContent: placeholderText,
+          textContent: placeholderText,
+          attachments: message.attachments || [], // Keep attachments if any
+          isAnalysisPrompt: true, // Mark as analysis prompt
+          turnId: message.turnId || null
+        };
+        
+        processedHistory.push(processedMessage);
+        
+        if (includeInPrompt) {
+          historyForPrompt += `MESSAGE ${messageIndex} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${placeholderText}\n\n---\n\n`;
+        }
+      } else {
+        // Regular message - include normally
+        const processedMessage = { 
+          id: messageIndex, 
+          role: message.role, 
+          richContent: message.richContent,
+          textContent: message.textContent,
+          attachments: message.attachments || [],
+          turnId: message.turnId || null
+        };
+        
+        processedHistory.push(processedMessage);
+        
+        if (includeInPrompt) {
+          // Use rich content (markdown) for the prompt, which preserves formatting
+          let messageText = message.richContent || message.textContent;
+          if (message.attachments && message.attachments.length > 0 && !messageText.includes('[ATTACHMENT:')) {
+            const attachmentInfo = message.attachments.map(att => 
+              `[ATTACHMENT: ${att.name} (${att.type})]`
+            ).join('\n');
+            messageText = attachmentInfo + (messageText ? '\n\n' + messageText : '');
+          }
+          
+          historyForPrompt += `MESSAGE ${messageIndex} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${messageText}\n\n---\n\n`;
+        }
+      }
+  });
+  
+  return {
+    processedHistory,
+    historyForPrompt
+  };
+}
+
 // Main analysis function
 async function analyzeAndPrepare() {
   analysisCancelled = false;
@@ -942,81 +1126,11 @@ async function analyzeAndPrepare() {
     return;
   }
   
-  const chatHistoryForStorage = [];
-  let historyForPrompt = "";
-
-  scrapedHistory.forEach((message, index) => {
-      // Check for cancellation
-      if (analysisCancelled) {
-        return;
-      }
-      
-      // Send progress update
-      sendProgressUpdate(index + 1);
-      
-      // Check if this is an analysis prompt
-      const isAnalysisPrompt = message.textContent.includes("You are a conversation analysis AI") || 
-                               message.textContent.includes("[CHAT HISTORY TO ANALYZE]") ||
-                               message.textContent.includes("CHAT HISTORY TO ANALYZE") ||
-                               message.textContent.includes("conversation analysis") ||
-                               message.textContent.includes("analyze the chat history") ||
-                               message.textContent.includes("provide two outputs: a JSON map of threads") ||
-                               message.textContent.includes("Mermaid git graph") ||
-                               message.textContent.includes("assign each message ID to a thematic thread") ||
-                               message.textContent.includes("Read the entire chat history provided below") ||
-                               (message.textContent.length > 5000 && message.role === "User"); // Very long user messages are likely analysis prompts
-      
-      // Check if this contains thinking/reasoning content (should be completely skipped)
-      const isThinkingContent = message.textContent.includes("Assessing Input Nuance") ||
-                               message.textContent.includes("Analyzing Contextual Implications") ||
-                               message.textContent.includes("Decoding the User's Intent") ||
-                               message.textContent.includes("Formulating the Response") ||
-                               message.textContent.includes("Expand to view model thoughts") ||
-                               message.textContent.includes("(experimental)") ||
-                               message.textContent.includes("Thoughts");
-      
-      // Skip thinking content entirely (don't include in message count)
-      if (isThinkingContent) {
-        return;
-      }
-      
-      // For analysis prompts, replace content with placeholder but keep the message
-      if (isAnalysisPrompt) {
-        const placeholderText = "Chat history skipped because it was meant for the analysis prompt, no need to reflect to this content.";
-        
-        chatHistoryForStorage.push({ 
-          id: index + 1, 
-          role: message.role, 
-          richContent: placeholderText,
-          textContent: placeholderText,
-          attachments: message.attachments || [], // Keep attachments if any
-          isAnalysisPrompt: true, // Mark as analysis prompt
-          turnId: message.turnId || null
-        });
-        
-        historyForPrompt += `MESSAGE ${index + 1} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${placeholderText}\n\n---\n\n`;
-      } else {
-        // Regular message - include normally
-        chatHistoryForStorage.push({ 
-          id: index + 1, 
-          role: message.role, 
-          richContent: message.richContent,
-          textContent: message.textContent,
-          attachments: message.attachments || [],
-          turnId: message.turnId || null
-        });
-        
-        // Use rich content (markdown) for the prompt, which preserves formatting
-        let messageText = message.richContent || message.textContent;
-        if (message.attachments && message.attachments.length > 0 && !messageText.includes('[ATTACHMENT:')) {
-          const attachmentInfo = message.attachments.map(att => 
-            `[ATTACHMENT: ${att.name} (${att.type})]`
-          ).join('\n');
-          messageText = attachmentInfo + (messageText ? '\n\n' + messageText : '');
-        }
-        
-        historyForPrompt += `MESSAGE ${index + 1} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${messageText}\n\n---\n\n`;
-      }
+  // Process the scraped history using the reusable function
+  const { processedHistory, historyForPrompt } = processScrapedHistory(scrapedHistory, {
+    includeInPrompt: true,
+    sendProgress: true,
+    checkCancellation: true
   });
   
   // Final cancellation check before saving
@@ -1025,13 +1139,7 @@ async function analyzeAndPrepare() {
     return;
   }
   
-  const chatId = getCurrentChatId();
-  const timestamp = Date.now();
-  chrome.storage.local.set({ 
-    [`chat_history_${chatId}`]: chatHistoryForStorage,
-    current_chat_id: chatId,
-    [`data_created_${chatId}`]: timestamp
-  });
+  // No storage needed! Analysis results will be extracted from DOM when needed
 
   const dualPurposePrompt = `**TASK:** You are a conversation analysis AI that maps conversation branches like Git.
 
@@ -1159,75 +1267,21 @@ ${historyForPrompt}
     hideProgressOverlay();
   }, 3000); // Keep overlay visible for 3 seconds to show completion
   
-  setTimeout(() => watchForAnalysisResponse(scrapedHistory), 2000); 
+  // No need to watch - we'll detect and store when user opens popup next time 
 }
 
-function watchForAnalysisResponse(scrapedHistory) {
-  const lastModelTurn = Array.from(document.querySelectorAll(`${pageConfig.turnSelector}.model`)).pop();
-  if (!lastModelTurn) return;
-
-  const observer = new MutationObserver((mutations) => {
-      // DOM-first extraction from expansion panels (robust to highlighted/combined blocks)
-      const domExtract = extractJsonAndMermaidFromDom(lastModelTurn);
-      if (domExtract && (domExtract.json || domExtract.mermaid)) {
-        try {
-          const chatId = getCurrentChatId();
-          const storageData = { current_chat_id: chatId };
-          let enhancedBranchMap = {};
-
-          if (domExtract.json) {
-            storageData[`json_data_${chatId}`] = domExtract.json;
-            try {
-              const gitGraph = JSON.parse(domExtract.json);
-              if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
-                gitGraph.actions.forEach(action => {
-                  if (action && action.type === 'commit' && action.id) {
-                    const turnId = String(action.id);
-                    const branchName = String(action.branch_hint || action.branch || '').trim();
-                    if (!branchName) {
-                      return;
-                    }
-                    const idx = scrapedHistory.findIndex(m => m.turnId === turnId);
-                    if (idx !== -1) {
-                      const messageNum = idx + 1;
-                      enhancedBranchMap[messageNum] = { thread: branchName, turnId };
-                    }
-                  }
-                });
-                storageData[`branch_map_${chatId}`] = enhancedBranchMap;
-              }
-            } catch (e) {
-            }
-          }
-
-          if (domExtract.mermaid) {
-            storageData[`mermaid_diagram_${chatId}`] = domExtract.mermaid;
-          }
-
-          // Only save if we have any artifact
-          if (storageData[`json_data_${chatId}`] || storageData[`mermaid_diagram_${chatId}`]) {
-            storageData[`analysis_completed_${chatId}`] = true;
-            chrome.storage.local.set(storageData);
-            chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
-            });
-            // Notify popup and restore scroll position
-            safeSendToPopup({ action: 'analysisCompleted', chatId });
-            setTimeout(() => { try { scrollToBottomOfChat(); } catch (_) {} }, 300);
-            observer.disconnect();
-            return;
-          }
-        } catch (err) {
-        }
-      }
-
-      // No text-based fallbacks by design
-      return;
-  });
-
-  observer.observe(lastModelTurn, { childList: true, subtree: true });
+// Helper function to store analysis turn-id when we detect it
+function storeAnalysisTurnId(turnElement) {
+  const chatId = getCurrentChatId();
+  const turnId = turnElement.id;
   
-  // Send completion signal
-  sendAnalysisComplete();
+  if (chatId && turnId) {
+    chrome.storage.local.set({ 
+      [`analysis_turn_${chatId}`]: turnId,
+      [`analysis_completed_${chatId}`]: Date.now()
+    });
+    console.log(`Stored analysis turn reference: ${turnId} for chat ${chatId}`);
+  }
 }
 
 // Extract JSON and Mermaid code text from AI Studio code panels (handles combined block)
@@ -1308,26 +1362,22 @@ function extractFirstBalancedJson(text) {
   return null;
 }
 
-// New function to load analysis from the last model message
-async function loadAnalysis(showAlerts = true) {
-  
+// Helper function to get the latest analysis from DOM
+function getLatestAnalysisFromDom() {
   determinePageConfiguration();
   
   if (!pageConfig.turnSelector) {
-    return;
+    return null;
   }
 
-  // Find the last model turn using the same logic as climbAndScrapeHistory
-  // NOTE: We're looking for the NEWEST message (analysis response) that came AFTER step 1
+  // Find the last model turn that contains analysis results
   const allTurns = Array.from(document.querySelectorAll(pageConfig.turnSelector));
   
   if (allTurns.length === 0) {
-    return;
+    return null;
   }
 
-  // Find the last model turn by checking classList.contains('model')
-  // This should be the analysis response that was generated AFTER step 1
-  let lastModelTurn = null;
+  // Search from newest to oldest for a model turn with analysis data
   for (let i = allTurns.length - 1; i >= 0; i--) {
     const turn = allTurns[i];
     
@@ -1335,65 +1385,62 @@ async function loadAnalysis(showAlerts = true) {
     const isModelTurn = !turn.classList.contains('user');
     
     if (isModelTurn) {
-      lastModelTurn = turn;
-      break;
+      // Try to extract analysis data from this turn
+      const domExtract = extractJsonAndMermaidFromDom(turn);
+      if (domExtract && (domExtract.json || domExtract.mermaid)) {
+        // Build branch map from JSON if available
+        let branchMap = {};
+        if (domExtract.json) {
+          try {
+            const gitGraph = JSON.parse(domExtract.json);
+            if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
+              let messageNum = 1;
+              gitGraph.actions.forEach(action => {
+                if (action && action.type === 'commit' && action.id) {
+                  const turnId = String(action.id);
+                  const branchName = String(action.branch_hint || action.branch || '').trim();
+                  if (!branchName) {
+                    return;
+                  }
+                  branchMap[messageNum] = { thread: branchName, turnId };
+                  messageNum++;
+                }
+              });
+            }
+          } catch (e) {
+            // JSON parsing failed, continue without branch map
+          }
+        }
+        
+        // Store the turn-id when we find analysis (this happens when popup opens)
+        storeAnalysisTurnId(turn);
+        
+        return {
+          json: domExtract.json,
+          mermaid: domExtract.mermaid,
+          branchMap: branchMap,
+          hasData: true,
+          turnId: turn.id
+        };
+      }
     }
   }
   
-  if (!lastModelTurn) {
-    return;
-  }
+  return null;
+}
 
-  // DOM-first extraction from the last model turn
-  const domExtract = extractJsonAndMermaidFromDom(lastModelTurn);
-  const chatId = getCurrentChatId();
-  if (!chatId) { return; }
-  const storageData = { current_chat_id: chatId };
-  let enhancedBranchMap = {};
-
-  if (domExtract.json) {
-    storageData[`json_data_${chatId}`] = domExtract.json;
-    try {
-      const stored = await chrome.storage.local.get([`chat_history_${chatId}`]);
-      const chatHistory = stored[`chat_history_${chatId}`];
-      
-        if (!chatHistory || !Array.isArray(chatHistory)) {
-          return { hasJsonData: false, hasMermaidData: false };
-        }
-      const gitGraph = JSON.parse(domExtract.json);
-      if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
-        gitGraph.actions.forEach(action => {
-          if (action && action.type === 'commit' && action.id) {
-            const turnId = String(action.id);
-            const branchName = String(action.branch_hint || action.branch || '').trim();
-            if (!branchName) {
-              return;
-            }
-            const idx = chatHistory.findIndex(m => m.turnId === turnId);
-            if (idx !== -1) {
-              const messageNum = idx + 1;
-              enhancedBranchMap[messageNum] = { thread: branchName, turnId };
-            }
-          }
-        });
-        storageData[`branch_map_${chatId}`] = enhancedBranchMap;
-      }
-    } catch (e) {
-    }
-  }
-
-  if (domExtract.mermaid) {
-    storageData[`mermaid_diagram_${chatId}`] = domExtract.mermaid;
-  }
-
-  if (storageData[`json_data_${chatId}`] || storageData[`mermaid_diagram_${chatId}`]) {
-    storageData[`analysis_completed_${chatId}`] = true;
-    chrome.storage.local.set(storageData);
-    chrome.storage.local.remove(`data_cleared_${chatId}`, () => {
-    });
-    // Notify popup to auto-reload
+// Function to load analysis from DOM (for popup compatibility)
+async function loadAnalysis(showAlerts = true) {
+  const analysis = getLatestAnalysisFromDom();
+  
+  if (analysis && analysis.hasData) {
+    // Notify popup that analysis is available
+    const chatId = getCurrentChatId();
     safeSendToPopup({ action: 'analysisCompleted', chatId });
-    return { hasJsonData: !!storageData[`json_data_${chatId}`], hasMermaidData: !!storageData[`mermaid_diagram_${chatId}`] };
+    return { 
+      hasJsonData: !!analysis.json, 
+      hasMermaidData: !!analysis.mermaid 
+    };
   } else {
     return { hasJsonData: false, hasMermaidData: false };
   }
@@ -1408,21 +1455,29 @@ async function openFilteredBranch(branchName) {
     return;
   }
   
-  const data = await chrome.storage.local.get([`chat_history_${chatId}`, `branch_map_${chatId}`]);
-  
-  const branchMap = data[`branch_map_${chatId}`];
-  const chatHistory = data[`chat_history_${chatId}`];
-  
-  // FAIL FAST: Validate required data exists
-  if (!chatHistory || !Array.isArray(chatHistory)) {
-    
+  // Get analysis data from DOM instead of storage
+  const analysis = getLatestAnalysisFromDom();
+  if (!analysis || !analysis.branchMap) {
+    console.log('No analysis data found in DOM for branch filtering');
     return;
   }
   
-  if (!branchMap || typeof branchMap !== 'object') {
-    
+  const branchMap = analysis.branchMap;
+  
+  // Re-scrape and process current chat history for content
+  const scrapedHistory = await climbAndScrapeHistory();
+  if (scrapedHistory.length === 0) {
     return;
   }
+  
+  const { processedHistory } = processScrapedHistory(scrapedHistory, {
+    includeInPrompt: false, // We don't need prompt format for branch copying
+    sendProgress: false,
+    checkCancellation: false
+  });
+  
+  // Use the freshly processed history
+  const chatHistory = processedHistory;
   
   const threadMessages = chatHistory.filter(message => {
     const messageThreadData = branchMap[String(message.id)];
@@ -1674,26 +1729,18 @@ async function goToBranch(branchName) {
     return;
   }
   
-  const data = await chrome.storage.local.get([`chat_history_${chatId}`, `branch_map_${chatId}`]);
-  
-  const branchMap = data[`branch_map_${chatId}`];
-  const chatHistory = data[`chat_history_${chatId}`];
-  
-  // FAIL FAST: Validate required data exists
-  if (!chatHistory || !Array.isArray(chatHistory)) {
-    
+  // Get analysis data from DOM instead of storage
+  const analysis = getLatestAnalysisFromDom();
+  if (!analysis || !analysis.branchMap) {
+    console.log('No analysis data found in DOM for branch navigation');
     return;
   }
   
-  if (!branchMap || typeof branchMap !== 'object') {
-    
-    return;
-  }
+  const branchMap = analysis.branchMap;
   
   
   
   // Find the last message in this branch
-  let lastMessageInThread = null;
   let lastTurnId = null;
   let lastMessageNumber = null;
   
@@ -1717,18 +1764,13 @@ async function goToBranch(branchName) {
     
     
     if (threadForMessage === branchName) {
-      // Get the corresponding message from chat history
-      lastMessageInThread = chatHistory[messageNum - 1]; // Convert to 0-based index
-      lastTurnId = storedTurnId || (lastMessageInThread && lastMessageInThread.turnId); // Use stored turn ID or fallback
+      lastTurnId = storedTurnId;
       lastMessageNumber = messageNum;
-      
-      // Show first few words of the message content for verification
-      const messagePreview = (lastMessageInThread.textContent || lastMessageInThread.richContent || 'No content').substring(0, 100);
       break;
     }
   }
   
-  if (!lastMessageInThread) {
+  if (!lastTurnId) {
     
     return;
   }
@@ -1762,16 +1804,6 @@ async function goToBranch(branchName) {
   // Find the turn element on the page and scroll to it
   const turnElement = document.getElementById(lastTurnId);
   if (turnElement) {
-    
-    // Log some info about the element we found
-    const turnContent = turnElement.querySelector('.turn-content');
-    if (turnContent) {
-      const contentPreview = turnContent.textContent?.substring(0, 100) || 'No text content';
-      
-      const expectedContent = (lastMessageInThread.textContent || lastMessageInThread.richContent || 'No content').substring(0, 100);
-      
-      const isMatch = contentPreview.includes(expectedContent.substring(0, 30)) || expectedContent.includes(contentPreview.substring(0, 30));
-    }
     
     turnElement.scrollIntoView({ 
       behavior: 'smooth', 
