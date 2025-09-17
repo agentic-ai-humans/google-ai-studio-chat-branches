@@ -492,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
             branchNames = Array.from(names).filter(n => n && n.toLowerCase() !== 'gitgraph');
           }
         } catch (e) {
-          console.warn('Failed to parse structured JSON for branch list', e);
+          console.error('Failed to parse structured JSON for branch list:', e);
         }
       }
 
@@ -689,10 +689,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Get chatId and branch map to calculate branch info
     sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
       if (response && response.chatId) {
-        chrome.storage.local.get([`branch_map_${response.chatId}`, `chat_history_${response.chatId}`, `selected_branch_${response.chatId}`], (result) => {
-          const branchMap = result[`branch_map_${response.chatId}`];
-          const chatHistory = result[`chat_history_${response.chatId}`];
-          const savedBranch = result[`selected_branch_${response.chatId}`];
+        const keys = getStorageKeys(response.chatId);
+        chrome.storage.local.get([keys.branchMap, keys.chatHistory, keys.selectedBranch], (result) => {
+          const branchMap = result[keys.branchMap];
+          const chatHistory = result[keys.chatHistory];
+          const savedBranch = result[keys.selectedBranch];
           
           if (branchMap && chatHistory) {
             console.log('USING GIT-STYLE SORTING with branch map and chat history');
@@ -849,13 +850,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   copyMermaidButton.addEventListener('click', () => {
     console.log('POPUP: Copy Mermaid clicked');
-    console.log('POPUP: extractedMermaidData:', extractedMermaidData ? extractedMermaidData.substring(0, 100) + '...' : 'null');
-    console.log('POPUP: extractedJsonData:', extractedJsonData ? extractedJsonData.substring(0, 100) + '...' : 'null');
-    
-    // Prefer stored mermaid; fallback to extracting from JSON blob if combined
-    const mermaidToCopy = extractedMermaidData || tryExtractMermaidFromJson(extractedJsonData);
-    console.log('POPUP: mermaidToCopy:', mermaidToCopy ? mermaidToCopy.substring(0, 100) + '...' : 'null');
-    console.log('POPUP: Using fallback?', !extractedMermaidData && !!tryExtractMermaidFromJson(extractedJsonData));
+    const mermaidToCopy = getMermaidContent();
     
     if (mermaidToCopy) {
       copyToClipboard(mermaidToCopy, 'mermaid');
@@ -864,17 +859,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function tryExtractMermaidFromJson(jsonText) {
-    if (!jsonText || typeof jsonText !== 'string') return null;
-    // If someone stored JSON and Mermaid in one blob, locate gitGraph segment
-    const backtickClean = jsonText.replace(/```/g, '');
-    const idx = backtickClean.indexOf('gitGraph');
-    if (idx === -1) return null;
-    const tail = backtickClean.substring(idx);
-    // Stop at next closing fence if present (best-effort)
-    const fenceIdx = tail.indexOf('```');
-    const mermaid = (fenceIdx !== -1 ? tail.substring(0, fenceIdx) : tail).trim();
-    return mermaid.startsWith('gitGraph') ? mermaid : null;
+  // Unified Mermaid extraction - handles all cases reliably
+  function getMermaidContent() {
+    // Priority 1: Direct stored Mermaid data (most reliable)
+    if (extractedMermaidData && extractedMermaidData.trim()) {
+      console.log('POPUP: Using stored Mermaid data');
+      return extractedMermaidData.trim();
+    }
+    
+    // Priority 2: Extract from JSON data if available (fallback)
+    if (extractedJsonData && extractedJsonData.includes('gitGraph')) {
+      console.log('POPUP: Extracting Mermaid from JSON data');
+      const backtickClean = extractedJsonData.replace(/```/g, '');
+      const idx = backtickClean.indexOf('gitGraph');
+      if (idx !== -1) {
+        const tail = backtickClean.substring(idx);
+        const fenceIdx = tail.indexOf('```');
+        const mermaid = (fenceIdx !== -1 ? tail.substring(0, fenceIdx) : tail).trim();
+        if (mermaid.startsWith('gitGraph')) {
+          return mermaid;
+        }
+      }
+    }
+    
+    console.log('POPUP: No Mermaid content available');
+    return null;
   }
 
   // Create proper mermaid.live URL using pako compression
@@ -912,20 +921,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   showGraphButton.addEventListener('click', () => {
     console.log('POPUP: Show Graph clicked');
-    // Prefer stored mermaid; fallback to extracting from JSON blob if combined
-    const mermaidToShow = extractedMermaidData || tryExtractMermaidFromJson(extractedJsonData);
-    console.log('POPUP: mermaidToShow available:', !!mermaidToShow);
-    if (mermaidToShow) {
-      console.log('POPUP: Mermaid preview:', mermaidToShow.substring(0, 100) + '...');
-    }
+    const mermaidToShow = getMermaidContent();
     
     if (!mermaidToShow) {
       console.log('No Mermaid diagram available to show');
       return;
     }
+    
     try {
       // Create proper mermaid.live URL using pako compression
-      const url = createMermaidLiveURL(mermaidToShow.trim());
+      const url = createMermaidLiveURL(mermaidToShow);
       console.log('POPUP: Opening mermaid.live with pako-compressed data');
       chrome.tabs.create({ url });
     } catch (err) {
