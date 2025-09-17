@@ -4,11 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const mainTitle = document.getElementById('mainTitle');
   const filteringView = document.getElementById('filteringView');
   const incorrectDomainView = document.getElementById('incorrectDomainView');
-  const progressIndicator = document.getElementById('progressIndicator');
-  const progressCounter = document.getElementById('progressCounter');
-  const scrollProgress = document.getElementById('scrollProgress');
-  const scrollCounter = document.getElementById('scrollCounter');
-  const cancelAnalysisButton = document.getElementById('cancelAnalysisButton');
   const mainControls = document.getElementById('mainControls');
   const scrollToBottomButton = document.getElementById('scrollToBottomButton');
   const analyzeButton = document.getElementById('analyzeButton');
@@ -21,8 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const showGraphButton = document.getElementById('showGraphButton');
 
   let activeTabId = null;
-  let analysisInProgress = false;
-  let analysisCancelled = false;
   
   // Current analysis data (extracted from DOM)
   let currentAnalysisData = null;
@@ -44,31 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function showProgressIndicator() {
-    analysisInProgress = true;
-    analysisCancelled = false;
-    progressIndicator?.classList.remove('hidden');
-    mainControls?.classList.add('hidden');
-  }
-
-  function hideProgressIndicator() {
-    analysisInProgress = false;
-    progressIndicator?.classList.add('hidden');
-    mainControls?.classList.remove('hidden');
-  }
-
-  function updateProgress(count) {
-    if (progressCounter) {
-      progressCounter.textContent = count;
-    }
-  }
-
-  function updateScrollProgress(current, total) {
-    if (scrollProgress && scrollCounter) {
-      scrollProgress.classList.remove('hidden');
-      scrollCounter.textContent = `${current}/${total}`;
-    }
-  }
 
   function copyToClipboard(text, type) {
     navigator.clipboard.writeText(text).then(() => {
@@ -204,16 +172,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Analyze button
   analyzeButton?.addEventListener('click', () => {
-    showProgressIndicator();
+    // Don't show popup progress - the content script shows a nice center overlay
     sendMessageToContentScript({ action: 'analyzeAndPrepare' });
+    // Close popup so user can see the center overlay
+    window.close();
   });
 
-  // Cancel analysis
-  cancelAnalysisButton?.addEventListener('click', () => {
-    analysisCancelled = true;
-    sendMessageToContentScript({ action: 'cancelAnalysis' });
-    hideProgressIndicator();
-  });
 
   // Branch actions
   openBranchButton?.addEventListener('click', () => {
@@ -258,15 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Message Listeners ---
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'updateProgress') {
-      updateProgress(request.count);
-    } else if (request.action === 'updateScrollProgress') {
-      updateScrollProgress(request.current, request.total);
-    } else if (request.action === 'analysisComplete') {
-      hideProgressIndicator();
-      // Reload analysis data after completion
-      setTimeout(() => loadAnalysisData(), 1000);
-    } else if (request.action === 'analysisCompleted') {
+    if (request.action === 'analysisCompleted') {
       // Analysis was completed, reload data
       setTimeout(() => loadAnalysisData(), 500);
     }
