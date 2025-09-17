@@ -465,8 +465,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadDataFromStorage(storageData, chatId) {
       // Prefer JSON to derive branch list (no dependency on branch_map)
-      extractedJsonData = storageData[`json_data_${chatId}`] || null;
-      extractedMermaidData = storageData[`mermaid_diagram_${chatId}`] || null;
+      const keys = getStorageKeys(chatId);
+      extractedJsonData = storageData[keys.jsonData] || null;
+      extractedMermaidData = storageData[keys.mermaidDiagram] || null;
       
       console.log('POPUP: Loading data from storage for chatId:', chatId);
       console.log('POPUP: JSON data available:', !!extractedJsonData);
@@ -505,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // If we have branch data, always show the visualization section
       // (even if no JSON/Mermaid data yet - user can generate it)
-      if (extractedJsonData || extractedMermaidData || storageData[`branch_map_${chatId}`]) {
+      if (extractedJsonData || extractedMermaidData || storageData[keys.branchMap]) {
         console.log('AUTO-LOAD: Showing visualization section:', {
           hasBranches: branchNames.length > 0,
           hasJson: !!extractedJsonData,
@@ -517,8 +518,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       // Show timestamp
-      if (storageData[`data_created_${chatId}`]) {
-        const timestamp = new Date(storageData[`data_created_${chatId}`]);
+      if (storageData[keys.dataCreated]) {
+        const timestamp = new Date(storageData[keys.dataCreated]);
         dataTimestamp.textContent = `Data created: ${timestamp.toLocaleString()}`;
       }
       
