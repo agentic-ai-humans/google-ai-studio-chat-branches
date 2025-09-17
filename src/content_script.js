@@ -322,8 +322,14 @@ function htmlToMarkdown(html) {
             .trim();
         
     } catch (error) {
-        console.warn('CS: Turndown conversion failed, using fallback:', error);
-        // Fallback: return cleaned HTML with structural tags preserved
+        console.error('CS: CRITICAL - Turndown conversion failed!', {
+            error: error.message,
+            htmlLength: html ? html.length : 0,
+            htmlPreview: html ? html.substring(0, 200) + '...' : 'null'
+        });
+        
+        // Explicit fallback with warning - user should know markdown conversion failed
+        console.warn('CS: Using fallback HTML cleaning - formatting may be degraded');
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
         let cleanedHtml = tempDiv.innerHTML
@@ -388,12 +394,25 @@ function waitForContentInTurn(turnElement, timeout = 3000) {
                 }
             }
             
-            // Fallback to other selectors if still no content found
+            // FAIL FAST: Don't silently accept missing content
             if (!contentNode || !contentNode.innerText.trim()) {
-                contentNode = turnElement.querySelector('.turn-content') ||
-                             turnElement.querySelector('.user-prompt-container') ||
-                             turnElement.querySelector('.model-response-container');
-                console.log("CS: Using fallback content selector");
+                // Try fallback selectors but log what we're doing
+                const fallbackNode = turnElement.querySelector('.turn-content') ||
+                                   turnElement.querySelector('.user-prompt-container') ||
+                                   turnElement.querySelector('.model-response-container');
+                
+                if (fallbackNode && fallbackNode.innerText.trim()) {
+                    console.warn(`CS: Primary content selectors failed, using fallback for turn ${turnElement.id}`);
+                    contentNode = fallbackNode;
+                } else {
+                    console.error(`CS: CRITICAL - No content found with any selector for turn ${turnElement.id}!`, {
+                        turnId: turnElement.id,
+                        turnClasses: turnElement.className,
+                        primarySelectorsFound: !!turnElement.querySelector('ms-cmark-node'),
+                        fallbackSelectorsFound: !!fallbackNode
+                    });
+                    // Don't set contentNode to null/empty - let the validation below catch it
+                }
             }
             
             // Check for attachments in the turn
@@ -1644,9 +1663,21 @@ async function openFilteredBranch(branchName) {
   
   console.log("CS: Found thread messages:", threadMessages.length);
   
+  // FAIL FAST: Validate we found messages for this branch
+  if (threadMessages.length === 0) {
+    console.error(`CS: CRITICAL - No messages found for branch "${branchName}"!`, {
+      branchName,
+      chatId,
+      totalChatHistory: chatHistory.length,
+      branchMapKeys: Object.keys(branchMap),
+      availableBranches: Object.values(branchMap).map(data => data.thread).filter((v, i, a) => a.indexOf(v) === i)
+    });
+    return;
+  }
+  
   // Find the first message of the selected thread to determine the branch point
-  const firstThreadMessage = threadMessages.length > 0 ? threadMessages[0] : null;
-  const branchPoint = firstThreadMessage ? firstThreadMessage.id : null;
+  const firstThreadMessage = threadMessages[0];
+  const branchPoint = firstThreadMessage.id;
   console.log("CS: Branch point (first message of thread):", branchPoint);
   
   // Get all main branch messages BEFORE the branch point + all messages from the selected thread
@@ -1668,9 +1699,17 @@ async function openFilteredBranch(branchName) {
   
   console.log("CS: Total context messages (main + branch):", contextMessages.length);
   
+  // FAIL FAST: This should never happen if we have thread messages
   if (contextMessages.length === 0) {
-    console.log("CS: ERROR - No context messages found");
-    console.error(`CS: No messages found for thread "${branchName}"`);
+    console.error(`CS: CRITICAL - No context messages assembled for branch "${branchName}"!`, {
+      branchName,
+      threadMessagesLength: threadMessages.length,
+      branchPoint,
+      mainBranchCount,
+      chatHistoryLength: chatHistory.length,
+      threadMessageIds: threadMessages.map(m => m.id),
+      allMessageIds: chatHistory.map(m => m.id)
+    });
     return;
   }
 
@@ -1969,8 +2008,14 @@ async function goToBranch(branchName) {
   }
   
   if (!lastMessageInThread) {
-    console.log("CS: ❌ ERROR - No message found for branch:", branchName);
-    console.log("CS: Available branches in thread map:", Object.values(branchMap));
+    console.error(`CS: CRITICAL - No message found for branch "${branchName}"!`, {
+      branchName,
+      chatId,
+      branchMapSize: Object.keys(branchMap).length,
+      availableBranches: Object.values(branchMap).map(data => data.thread).filter((v, i, a) => a.indexOf(v) === i),
+      branchMapSample: Object.entries(branchMap).slice(0, 3),
+      searchedMessageNums: sortedMessageNums.slice(0, 10)
+    });
     return;
   }
   
@@ -2002,8 +2047,15 @@ async function goToBranch(branchName) {
   }
   
   if (!lastTurnId) {
-    console.log("CS: ❌ ERROR - Could not find turn ID for branch:", branchName);
-    console.log("CS: SUGGESTION - Please re-run the analysis to generate turn IDs for branch navigation");
+    console.error(`CS: CRITICAL - Could not find turn ID for branch "${branchName}"!`, {
+      branchName,
+      chatId,
+      lastMessageNumber,
+      lastMessageContent: lastMessageInThread ? (lastMessageInThread.textContent || '').substring(0, 100) + '...' : 'No content',
+      turnIdFromStorage: lastMessageInThread ? lastMessageInThread.turnId : 'N/A',
+      allTurnsOnPage: document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn').length
+    });
+    console.error("CS: SUGGESTION - Re-run analysis to generate turn IDs for branch navigation");
     return;
   }
   
@@ -2043,12 +2095,16 @@ async function goToBranch(branchName) {
     
     console.log("CS: ✅ Successfully navigated to branch");
   } else {
-    console.log("CS: ❌ ERROR - Could not find turn element with ID:", lastTurnId);
-    console.log("CS: Available turn elements on page:");
-    const allTurns = document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn');
-    allTurns.forEach((turn, index) => {
-      console.log(`CS:   Turn ${index}: ID="${turn.id}"`);
+    console.error(`CS: CRITICAL - Turn element not found in DOM for branch "${branchName}"!`, {
+      branchName,
+      chatId,
+      targetTurnId: lastTurnId,
+      lastMessageNumber,
+      pageSelector: pageConfig.turnSelector,
+      totalTurnsOnPage: document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn').length,
+      availableTurnIds: Array.from(document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn')).map(t => t.id).slice(0, 10)
     });
+    console.error("CS: This indicates the stored turnId doesn't match actual DOM elements");
   }
   
   console.log("CS: ===== GO TO BRANCH END =====");
