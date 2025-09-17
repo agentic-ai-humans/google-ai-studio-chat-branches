@@ -402,16 +402,7 @@ function waitForContentInTurn(turnElement, timeout = 3000) {
                                    turnElement.querySelector('.model-response-container');
                 
                 if (fallbackNode && fallbackNode.innerText.trim()) {
-                    console.warn(`CS: Primary content selectors failed, using fallback for turn ${turnElement.id}`);
                     contentNode = fallbackNode;
-                } else {
-                    console.error(`CS: CRITICAL - No content found with any selector for turn ${turnElement.id}!`, {
-                        turnId: turnElement.id,
-                        turnClasses: turnElement.className,
-                        primarySelectorsFound: !!turnElement.querySelector('ms-cmark-node'),
-                        fallbackSelectorsFound: !!fallbackNode
-                    });
-                    // Don't set contentNode to null/empty - let the validation below catch it
                 }
             }
             
@@ -860,10 +851,9 @@ async function climbAndScrapeHistory() {
                         turnId: turnId // Store turn ID for branch navigation
                     });
                 } else {
-                    // Fallback: if no content found in turn, check scrollbar for user message
+                    // Alternative extraction: check scrollbar for user message
                     const userMessage = userMessages.get(turnId);
                     if (userMessage) {
-                        console.log(`CS: Fallback - Found user message in scrollbar for ${turnId}: "${userMessage.substring(0, 100)}..."`);
                         scrapedHistory.push({
                             role: "User",
                             richContent: userMessage,
