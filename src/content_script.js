@@ -1723,8 +1723,8 @@ async function goToBranch(branchName) {
   }
   
   const branchMap = analysis.branchMap;
-  
-  
+  console.log('Branch map:', branchMap);
+  console.log('Looking for branch:', branchName);
   
   // Find the last message in this branch by checking all turnIds
   let lastTurnId = null;
