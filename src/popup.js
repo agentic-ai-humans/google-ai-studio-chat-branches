@@ -852,20 +852,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return extractedMermaidData.trim();
     }
     
-    // Priority 2: Extract from JSON data if available (fallback)
-    if (extractedJsonData && extractedJsonData.includes('gitGraph')) {
-      console.log('POPUP: Extracting Mermaid from JSON data');
-      const backtickClean = extractedJsonData.replace(/```/g, '');
-      const idx = backtickClean.indexOf('gitGraph');
-      if (idx !== -1) {
-        const tail = backtickClean.substring(idx);
-        const fenceIdx = tail.indexOf('```');
-        const mermaid = (fenceIdx !== -1 ? tail.substring(0, fenceIdx) : tail).trim();
-        if (mermaid.startsWith('gitGraph')) {
-          return mermaid;
-        }
-      }
-    }
+    // No text-based fallbacks - only use DOM-extracted data from content script
     
     console.log('POPUP: No Mermaid content available');
     return null;

@@ -1390,15 +1390,7 @@ function extractJsonAndMermaidFromDom(turnRoot) {
           result.json = json;
           console.log(`CS: Extracted JSON from panel ${index + 1}, length: ${json.length}`);
         }
-        // Only look for embedded Mermaid if this is a combined block (has both JSON and Mermaid)
-        // Check if the code contains both JSON structure AND gitGraph command (not just JSON with "gitGraph" string)
-        if (!result.mermaid && code.includes('gitGraph') && code.includes('commit message:')) {
-          const idx = code.indexOf('gitGraph');
-          if (idx !== -1) {
-            result.mermaid = code.substring(idx).replace(/```/g, '').trim();
-            console.log(`CS: Found embedded Mermaid in combined JSON panel ${index + 1}`);
-          }
-        }
+        // Combined blocks are handled by separate Mermaid panels - no text parsing needed
       } else if (/^Mermaid$/i.test(title)) {
         console.log(`CS: Processing Mermaid panel ${index + 1}`);
         if (!result.mermaid) {
@@ -1409,36 +1401,7 @@ function extractJsonAndMermaidFromDom(turnRoot) {
     });
     
     console.log(`CS: Final extraction result - JSON: ${!!result.json}, Mermaid: ${!!result.mermaid}`);
-    // Fallback: if still missing, scan raw code blocks directly
-    if (!result.json || !result.mermaid) {
-      const codeBlocks = Array.from(turnRoot.querySelectorAll('pre code'));
-      console.log(`CS: Fallback - scanning ${codeBlocks.length} raw code blocks`);
-      for (let i = 0; i < codeBlocks.length; i++) {
-        const raw = (codeBlocks[i].textContent || '').replace(/\u200B/g, '').replace(/```/g, '').trim();
-        if (!result.json) {
-          const json = extractFirstBalancedJson(raw);
-          if (json) {
-            try { 
-              JSON.parse(json); 
-              result.json = json; 
-              console.log(`CS: Fallback - extracted JSON from raw block ${i+1}`); 
-            } catch (parseError) {
-              console.error(`CS: CRITICAL - Invalid JSON in raw block ${i+1}:`, parseError.message);
-              console.error(`CS: Problematic JSON preview:`, json.substring(0, 200) + '...');
-            }
-          }
-        }
-        if (!result.mermaid && raw.includes('gitGraph')) {
-          const idx = raw.indexOf('gitGraph');
-          if (idx !== -1) {
-            result.mermaid = raw.substring(idx).trim();
-            console.log(`CS: Fallback - extracted Mermaid from raw block ${i+1}`);
-          }
-        }
-        if (result.json && result.mermaid) break;
-      }
-      console.log(`CS: After fallback - JSON: ${!!result.json}, Mermaid: ${!!result.mermaid}`);
-    }
+    // No text-based fallbacks - only use DOM-based extraction from expansion panels
     return result;
   } catch (error) {
     console.error('CS: Error in extractJsonAndMermaidFromDom:', error);
