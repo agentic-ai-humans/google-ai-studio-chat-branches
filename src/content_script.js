@@ -344,15 +344,18 @@ function htmlToMarkdown(html) {
     }
 }
 
-// --- FUNKCJA CZEKAJĄCA NA TREŚĆ W KONKRETNEJ WIADOMOŚCI ---
-function waitForContentInTurn(turnElement, timeout = 3000) {
+// --- COMPREHENSIVE CONTENT EXTRACTION ---
+function extractTurnContent(turnElement, userMessages, timeout = 3000) {
     return new Promise((resolve) => {
         if (!turnElement) { 
-            console.log("CS: waitForContentInTurn - no turnElement provided");
-            resolve(null); 
+            resolve({
+                richContent: '',
+                textContent: '',
+                attachments: [],
+                source: 'invalid'
+            }); 
             return; 
         }
-        console.log("CS: waitForContentInTurn - starting to wait for content...");
         const interval = 100;
         let elapsedTime = 0;
         const checker = setInterval(() => {
@@ -364,14 +367,12 @@ function waitForContentInTurn(turnElement, timeout = 3000) {
             for (const textChunk of textChunks) {
                 // Skip if this text chunk is inside a thinking panel (ms-thought-chunk)
                 if (textChunk.closest('ms-thought-chunk')) {
-                    console.log("CS: Skipping text chunk inside thinking panel");
                     continue;
                 }
                 
                 const cmarkNode = textChunk.querySelector('ms-cmark-node');
                 if (cmarkNode && cmarkNode.innerText.trim()) {
                     contentNode = cmarkNode;
-                    console.log("CS: Found content in text chunk outside thinking panel");
                     break;
                 }
             }
@@ -382,13 +383,11 @@ function waitForContentInTurn(turnElement, timeout = 3000) {
                 for (const cmarkNode of allCmarkNodes) {
                     // Skip if this cmark node is inside a thinking panel
                     if (cmarkNode.closest('ms-thought-chunk') || cmarkNode.closest('mat-expansion-panel')) {
-                        console.log("CS: Skipping cmark node inside thinking/expansion panel");
                         continue;
                     }
                     
                     if (cmarkNode.innerText.trim()) {
                         contentNode = cmarkNode;
-                        console.log("CS: Found content in cmark node outside thinking panel");
                         break;
                     }
                 }
@@ -413,13 +412,6 @@ function waitForContentInTurn(turnElement, timeout = 3000) {
             const hasTextContent = contentNode && contentNode.innerText.trim() !== "";
             const hasAttachments = attachments.length > 0;
             
-            console.log(`CS: Content check - hasTextContent: ${hasTextContent}, hasAttachments: ${hasAttachments}, elapsed: ${elapsedTime}ms`);
-            if (hasTextContent && contentNode) {
-                console.log(`CS: Found text content preview: "${contentNode.innerText.trim().substring(0, 100)}..."`);
-            }
-            if (hasAttachments) {
-                console.log(`CS: Found ${attachments.length} attachments:`, attachments.map(a => a.name));
-            }
             
             if (hasTextContent || hasAttachments) {
                 clearInterval(checker);
@@ -462,8 +454,26 @@ function waitForContentInTurn(turnElement, timeout = 3000) {
                 });
             } else if (elapsedTime >= timeout) {
                 clearInterval(checker);
-                console.warn(`CS: Timeout waiting for content in turn. It might be empty.`);
-                resolve(null);
+                
+                // Try scrollbar extraction as alternative method
+                const turnId = turnElement.id;
+                const userMessage = userMessages ? userMessages.get(turnId) : null;
+                
+                if (userMessage) {
+                    resolve({
+                        richContent: userMessage,
+                        textContent: userMessage,
+                        attachments: [],
+                        source: 'scrollbar'
+                    });
+                } else {
+                    resolve({
+                        richContent: '',
+                        textContent: '',
+                        attachments: [],
+                        source: 'empty'
+                    });
+                }
             }
             elapsedTime += interval;
         }, interval);
@@ -798,10 +808,9 @@ async function climbAndScrapeHistory() {
             // Skip this turn entirely - don't increment message numbers
         } else {
             // First try to extract content from the turn element itself
-            const content = await waitForContentInTurn(currentTurn);
-            console.log(`CS: Content found for turn ${turnIndex}:`, !!content);
+            const content = await extractTurnContent(currentTurn, userMessages);
             
-                if (content) {
+            if (content && (content.richContent || content.textContent || content.attachments.length > 0)) {
                     // Determine role based on turn structure
                     let role = "Model"; // Default to Model
                     
@@ -850,18 +859,6 @@ async function climbAndScrapeHistory() {
                         attachments: content.attachments || [],
                         turnId: turnId // Store turn ID for branch navigation
                     });
-                } else {
-                    // Alternative extraction: check scrollbar for user message
-                    const userMessage = userMessages.get(turnId);
-                    if (userMessage) {
-                        scrapedHistory.push({
-                            role: "User",
-                            richContent: userMessage,
-                            textContent: userMessage,
-                            attachments: [],
-                            turnId: turnId // Store turn ID for branch navigation
-                        });
-                    }
                 }
             }
 
