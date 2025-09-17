@@ -1001,7 +1001,7 @@ function processScrapedHistory(scrapedHistory, options = {}) {
   
   const processedHistory = [];
   let historyForPrompt = "";
-  let messageIndex = 0;
+  let messageSequence = 0; // Only for prompt numbering, not for IDs
 
   scrapedHistory.forEach((message, index) => {
       // Check for cancellation if requested
@@ -1040,36 +1040,34 @@ function processScrapedHistory(scrapedHistory, options = {}) {
         return;
       }
       
-      messageIndex++; // Only increment for non-thinking content
+      messageSequence++; // Only increment for non-thinking content (for prompt display)
       
       // For analysis prompts, replace content with placeholder but keep the message
       if (isAnalysisPrompt) {
         const placeholderText = "Chat history skipped because it was meant for the analysis prompt, no need to reflect to this content.";
         
         const processedMessage = { 
-          id: messageIndex, 
+          turnId: message.turnId, // Use turnId as primary identifier
           role: message.role, 
           richContent: placeholderText,
           textContent: placeholderText,
           attachments: message.attachments || [], // Keep attachments if any
-          isAnalysisPrompt: true, // Mark as analysis prompt
-          turnId: message.turnId || null
+          isAnalysisPrompt: true // Mark as analysis prompt
         };
         
         processedHistory.push(processedMessage);
         
         if (includeInPrompt) {
-          historyForPrompt += `MESSAGE ${messageIndex} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${placeholderText}\n\n---\n\n`;
+          historyForPrompt += `MESSAGE ${messageSequence} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${placeholderText}\n\n---\n\n`;
         }
       } else {
         // Regular message - include normally
         const processedMessage = { 
-          id: messageIndex, 
+          turnId: message.turnId, // Use turnId as primary identifier
           role: message.role, 
           richContent: message.richContent,
           textContent: message.textContent,
-          attachments: message.attachments || [],
-          turnId: message.turnId || null
+          attachments: message.attachments || []
         };
         
         processedHistory.push(processedMessage);
@@ -1084,7 +1082,7 @@ function processScrapedHistory(scrapedHistory, options = {}) {
             messageText = attachmentInfo + (messageText ? '\n\n' + messageText : '');
           }
           
-          historyForPrompt += `MESSAGE ${messageIndex} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${messageText}\n\n---\n\n`;
+          historyForPrompt += `MESSAGE ${messageSequence} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${messageText}\n\n---\n\n`;
         }
       }
   });
@@ -1394,7 +1392,6 @@ function getLatestAnalysisFromDom() {
           try {
             const gitGraph = JSON.parse(domExtract.json);
             if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
-              let messageNum = 1;
               gitGraph.actions.forEach(action => {
                 if (action && action.type === 'commit' && action.id) {
                   const turnId = String(action.id);
@@ -1402,8 +1399,8 @@ function getLatestAnalysisFromDom() {
                   if (!branchName) {
                     return;
                   }
-                  branchMap[messageNum] = { thread: branchName, turnId };
-                  messageNum++;
+                  // Use turnId as key instead of sequential numbers
+                  branchMap[turnId] = { thread: branchName, turnId };
                 }
               });
             }
@@ -1480,20 +1477,15 @@ async function openFilteredBranch(branchName) {
   const chatHistory = processedHistory;
   
   const threadMessages = chatHistory.filter(message => {
-    const messageThreadData = branchMap[String(message.id)];
+    // Check if this message's turnId exists in the branch map
+    const messageThreadData = branchMap[message.turnId];
     
-    // FAIL FAST: Validate thread data structure
-    if (messageThreadData && typeof messageThreadData !== 'object') {
-      
+    if (!messageThreadData || typeof messageThreadData !== 'object') {
       return false;
     }
     
     // Extract thread name from the stored object { thread: "...", turnId: "..." }
-    const messageThread = messageThreadData ? messageThreadData.thread : null;
-    
-    if (messageThreadData && !messageThread) {
-      
-    }
+    const messageThread = messageThreadData.thread;
     
     return messageThread === branchName;
   });
@@ -1507,22 +1499,19 @@ async function openFilteredBranch(branchName) {
   
   // Find the first message of the selected thread to determine the branch point
   const firstThreadMessage = threadMessages[0];
-  const branchPoint = firstThreadMessage.id;
+  const branchPointTurnId = firstThreadMessage.turnId;
   
-  // Get all main branch messages BEFORE the branch point + all messages from the selected thread
-  const contextMessages = [];
+  // Get all messages from the selected thread (we don't need main branch context for copying)
+  const contextMessages = [...threadMessages];
   
-  // Add main branch context (all messages before the branch point)
-  if (branchPoint) {
-    const mainBranchContext = chatHistory.filter(message => message.id < branchPoint);
-    contextMessages.push(...mainBranchContext);
-  }
-  
-  // Add all messages from the selected thread
-  contextMessages.push(...threadMessages);
-  
-  // Sort by ID to ensure chronological order
-  contextMessages.sort((a, b) => a.id - b.id);
+  // Sort messages chronologically by their position in the original chat
+  // (We'll use the order they appear in chatHistory as the chronological order)
+  const turnIdOrder = chatHistory.map(m => m.turnId);
+  contextMessages.sort((a, b) => {
+    const indexA = turnIdOrder.indexOf(a.turnId);
+    const indexB = turnIdOrder.indexOf(b.turnId);
+    return indexA - indexB;
+  });
   
   
   // FAIL FAST: This should never happen if we have thread messages
@@ -1532,13 +1521,11 @@ async function openFilteredBranch(branchName) {
   }
 
   // Create thread hierarchy information
-  const mainBranchCount = branchPoint ? contextMessages.filter(m => m.id < branchPoint).length : 0;
   const threadInfo = {
     branchName: branchName,
     totalMessages: contextMessages.length,
-    mainBranchMessages: mainBranchCount,
     threadSpecificMessages: threadMessages.length,
-    branchPoint: branchPoint,
+    branchPoint: branchPointTurnId,
     originalChatLength: chatHistory.length
   };
 
@@ -1546,16 +1533,14 @@ async function openFilteredBranch(branchName) {
   filteredContent += `**Thread Context Information:**\n`;
   filteredContent += `- Selected Thread: ${threadInfo.branchName}\n`;
   filteredContent += `- Total messages in context: ${threadInfo.totalMessages}\n`;
-  filteredContent += `- Main branch context: ${threadInfo.mainBranchMessages} messages\n`;
   filteredContent += `- Thread-specific messages: ${threadInfo.threadSpecificMessages} messages\n`;
-  filteredContent += `- Branch started at message: ${threadInfo.branchPoint || 'N/A'}\n`;
+  filteredContent += `- Branch started at turn: ${threadInfo.branchPoint || 'N/A'}\n`;
   filteredContent += `- Original full chat length: ${threadInfo.originalChatLength} messages\n\n`;
   filteredContent += `---\n\n`;
 
-  // Add all context messages (main branch + selected thread)
+  // Add all context messages from the selected thread
+  let messageIndex = 1;
   for (const message of contextMessages) {
-    const messageType = branchPoint && message.id < branchPoint ? "Main Branch" : branchName;
-    
     // Use richContent (now markdown) for better formatting, fallback to textContent
     let cleanContent = message.richContent || message.textContent;
     
@@ -1580,7 +1565,8 @@ async function openFilteredBranch(branchName) {
       }
     }
     
-    filteredContent += `## Message ${message.id} (${message.role}) - ${messageType}\n\n${cleanContent}\n\n---\n\n`;
+    filteredContent += `## Message ${messageIndex} (${message.role}) - ${branchName}\n**Turn ID:** ${message.turnId}\n\n${cleanContent}\n\n---\n\n`;
+    messageIndex++;
   }
 
   // Check if there are any attachments across all messages
@@ -1740,87 +1726,47 @@ async function goToBranch(branchName) {
   
   
   
-  // Find the last message in this branch
+  // Find the last message in this branch by checking all turnIds
   let lastTurnId = null;
-  let lastMessageNumber = null;
+  let lastTurnElement = null;
   
-  // Iterate over existing keys only, sorted descending numerically, to avoid undefined gaps
-  const sortedMessageNums = Object.keys(branchMap)
-    .map(k => parseInt(k, 10))
-    .filter(n => !Number.isNaN(n))
-    .sort((a, b) => b - a);
-  for (const messageNum of sortedMessageNums) {
-    const threadData = branchMap[messageNum];
-    if (threadData === undefined || threadData === null) {
-      continue;
-    }
-    
-    // New format only: object with thread and turnId
-    if (typeof threadData !== 'object' || threadData === null) {
-      continue;
-    }
-    const threadForMessage = threadData.thread;
-    const storedTurnId = threadData.turnId || null;
-    
-    
-    if (threadForMessage === branchName) {
-      lastTurnId = storedTurnId;
-      lastMessageNumber = messageNum;
-      break;
-    }
-  }
+  // Get all turn elements on the page
+  const allTurns = document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn');
   
-  if (!lastTurnId) {
+  // Go through turns from newest to oldest to find the last message in this branch
+  for (let i = allTurns.length - 1; i >= 0; i--) {
+    const turnElement = allTurns[i];
+    const turnId = turnElement.id;
     
-    return;
-  }
-  
-  // If turnId is undefined (old analysis data), try to find the turn element by scanning the page
-  if (!lastTurnId && lastMessageNumber) {
-    const allTurns = document.querySelectorAll(pageConfig.turnSelector || 'ms-chat-turn');
-    
-    // Log all turn IDs on the page for debugging
-    allTurns.forEach((turn, index) => {
-    });
-    
-    // Try to map the message number to a turn element by position
-    // Turns are in the same order as messages (first message = first turn, etc.)
-    if (allTurns.length > 0) {
-      const turnIndex = lastMessageNumber - 1; // Convert to 0-based index (message 1 = index 0)
-      if (turnIndex >= 0 && turnIndex < allTurns.length) {
-        const estimatedTurn = allTurns[turnIndex];
-        lastTurnId = estimatedTurn.id;
-      } else {
+    if (turnId && branchMap[turnId]) {
+      const threadData = branchMap[turnId];
+      if (threadData && threadData.thread === branchName) {
+        lastTurnId = turnId;
+        lastTurnElement = turnElement;
+        break;
       }
     }
   }
   
-  if (!lastTurnId) {
-    
+  if (!lastTurnId || !lastTurnElement) {
+    console.log(`No turn found for branch: ${branchName}`);
     return;
   }
+  // Scroll to the found turn element
+  lastTurnElement.scrollIntoView({ 
+    behavior: 'smooth', 
+    block: 'center',
+    inline: 'nearest'
+  });
   
+  // Add a visual highlight effect
+  lastTurnElement.style.transition = 'background-color 0.3s ease';
+  lastTurnElement.style.backgroundColor = '#fff3cd';
+  setTimeout(() => {
+    lastTurnElement.style.backgroundColor = '';
+  }, 2000);
   
-  // Find the turn element on the page and scroll to it
-  const turnElement = document.getElementById(lastTurnId);
-  if (turnElement) {
-    
-    turnElement.scrollIntoView({ 
-      behavior: 'smooth', 
-      block: 'center',
-      inline: 'nearest'
-    });
-    
-    // Add a visual highlight effect
-    turnElement.style.transition = 'background-color 0.3s ease';
-    turnElement.style.backgroundColor = '#fff3cd';
-    setTimeout(() => {
-      turnElement.style.backgroundColor = '';
-    }, 2000);
-    
-  } else {
-    
-  }
+  console.log(`Navigated to branch "${branchName}" at turn: ${lastTurnId}`);
   
 }
 

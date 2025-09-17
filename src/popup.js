@@ -51,19 +51,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     branchSelector.innerHTML = '<option value="">Select a branch...</option>';
     
-    // Get unique branch names from the branch map
-    const branchNames = new Set();
+    // Get branch names with counts from the branch map
+    const branchCounts = {};
     Object.values(analysisData.branchMap).forEach(data => {
-      if (data.thread) {
-        branchNames.add(data.thread);
+      if (data && data.thread) {
+        branchCounts[data.thread] = (branchCounts[data.thread] || 0) + 1;
       }
     });
     
-    // Sort and add to selector
-    Array.from(branchNames).sort().forEach(branchName => {
+    // Sort and add to selector with message counts
+    Object.keys(branchCounts).sort().forEach(branchName => {
       const option = document.createElement('option');
       option.value = branchName;
-      option.textContent = branchName;
+      const count = branchCounts[branchName];
+      option.textContent = `${branchName} (${count} message${count > 1 ? 's' : ''})`;
       branchSelector.appendChild(option);
     });
   }
