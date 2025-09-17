@@ -1444,19 +1444,22 @@ async function loadAnalysis(showAlerts = true) {
 }
 
 async function openFilteredBranch(branchName) {
-  
-  // Use current chat ID for this page
   const chatId = getCurrentChatId();
+  if (!chatId) return;
   
-  if (!chatId) {
-    return;
-  }
+  // Try to get analysis from current view first
+  let analysis = getLatestAnalysisFromDom();
   
-  // Get analysis data from DOM instead of storage
-  const analysis = getLatestAnalysisFromDom();
+  // If not found in current view, scroll to bottom to find latest analysis
   if (!analysis || !analysis.branchMap) {
-    console.log('No analysis data found in DOM for branch filtering');
-    return;
+    scrollToBottomOfChat();
+    // Wait for scroll to complete then try again
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    analysis = getLatestAnalysisFromDom();
+    
+    if (!analysis || !analysis.branchMap) {
+      return;
+    }
   }
   
   const branchMap = analysis.branchMap;
