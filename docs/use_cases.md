@@ -23,9 +23,8 @@ When you open the extension on a chat that hasn't been analyzed yet, you'll see:
 1. The extension scrolls through your entire chat
 2. It creates a special prompt for the AI to analyze your conversation
 3. **The prompt gets exported to a downloadable file** (bypasses input length limits!)
-4. Instructions are inserted into the chat input pane
-5. You attach the downloaded file to your message and press Send
-6. The AI responds with a breakdown of your conversation topics
+4. You attach the downloaded file to your message and press Send
+5. The AI responds with a breakdown of your conversation topics
 
 ---
 
@@ -439,12 +438,11 @@ This covers all the major use cases and edge cases for the extension!
 3. `climbAndScrapeHistory()` scrolls through chat
 4. Progress updates: "Scrolling through chat: X/Y messages"
 5. `exportPromptToFile()` creates and downloads analysis prompt file
-6. `insertPrompt()` pastes short instruction message with filename
-7. `hideProgressOverlay()` after 5 seconds with file export completion message
-8. User manually attaches downloaded file and clicks Send in AI Studio
-9. AI responds with analysis
-10. **If user reopens popup during operation:** UC-11 (potential conflicts)
-11. **After operation completes:** Next popup open → UC-04 or UC-05
+6. `hideProgressOverlay()` after 5 seconds with file export completion message
+7. User manually attaches downloaded file and clicks Send in AI Studio
+8. AI responds with analysis
+9. **If user reopens popup during operation:** UC-11 (potential conflicts)
+10. **After operation completes:** Next popup open → UC-04 or UC-05
 
 ---
 

@@ -108,7 +108,6 @@ The "Google AI Studio Chat Branches" extension should now appear in your list of
   - Collects all messages while filtering out thinking content and previous analyses
   - Detects file attachments with timestamps and metadata
   - **Exports the analysis prompt to a downloadable file** (bypasses input length limits!)
-  - Inserts helpful instructions into the chat input pane
 - **Important**: Attach the downloaded file to your message and click "Send" to run the analysis
 - The AI responds with TWO code blocks:
   - **JSON gitGraph**: Structured data with exact `turnId`s and branch mappings
@@ -125,21 +124,21 @@ The "Google AI Studio Chat Branches" extension should now appear in your list of
 
 #### 4. **Navigate and Extract Branches**
 - **"Go to branch"**: Scrolls to and highlights messages from the selected branch (popup stays open)
-- **"Copy branch to clipboard"**: Extracts the complete branch with full context
+- **"Export branch"**: Extracts the complete branch with full context
   - Includes all relevant messages from that thematic thread
   - Adds attachment requirements with timestamps for re-upload
   - Provides branch metadata and context information
-  - Shows success alert: "The full history for the [BRANCH_NAME] thread has been copied to your clipboard"
+  - Shows success alert: "The full history for the [BRANCH_NAME] thread has been exported to file"
 - **"Find Analysis"**: Scrolls to existing analysis if it's not currently visible (popup closes)
 
 #### 5. **Visualize Your Conversation**
 - Click **"Show Graph"** to open the Mermaid diagram in mermaid.live (auto-generated URL)
-- Use **"Copy JSON"** or **"Copy Mermaid"** for external analysis tools
+- Use **"Export JSON"** or **"Export Mermaid"** to download files for external analysis tools
 - The visual graph shows how your conversation branched and evolved over time
 
 #### 6. **Continue in New Chat**
 - Open a new Google AI Studio chat
-- Paste the copied branch content (includes full context and instructions)
+- Attach the downloaded branch file (includes full context and instructions)
 - Re-upload any required attachments (clearly listed with exact names and timestamps)
 - Continue your focused conversation with complete historical context
 
