@@ -1034,6 +1034,160 @@ function sendAnalysisComplete() {
   safeSendToPopup({ action: 'analysisComplete' });
 }
 
+// Generate stable message identifier using content + position
+function generateStableMessageId(textContent, role, messageSequence) {
+  // Use first 50 chars of content + role + sequence for stable identification
+  // This survives page refreshes unlike turnId
+  const contentSnippet = textContent.trim().slice(0, 50).replace(/\s+/g, ' ');
+  return `${role}_${messageSequence}_${contentSnippet}`;
+}
+
+// Find message in current DOM by content matching
+function findMessageByContent(targetContent, targetRole, targetSequence) {
+  const allTurns = Array.from(document.querySelectorAll('ms-chat-turn'));
+  let currentSequence = 0;
+  
+  for (const turn of allTurns) {
+    // Skip thinking-only turns
+    if (isThinkingOnlyTurn(turn)) continue;
+    
+    currentSequence++;
+    
+    // Check if this matches our target sequence
+    if (currentSequence === targetSequence) {
+      // Extract content to verify match
+      const content = extractTurnContentSync(turn);
+      if (content && content.textContent) {
+        const contentSnippet = content.textContent.trim().slice(0, 50).replace(/\s+/g, ' ');
+        const expectedSnippet = targetContent.trim().slice(0, 50).replace(/\s+/g, ' ');
+        
+        // Match by content similarity and role
+        if (contentSnippet === expectedSnippet && content.role === targetRole) {
+          return turn;
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Synchronous version of extractTurnContent for matching
+function extractTurnContentSync(turnElement) {
+  if (!turnElement) return null;
+  
+  // Determine role
+  let role = "Model"; // Default
+  const roleElement = turnElement.querySelector('[data-turn-role]');
+  if (roleElement) {
+    role = roleElement.getAttribute('data-turn-role');
+  } else if (turnElement.querySelector('.user') || turnElement.querySelector('.user-prompt-container')) {
+    role = "User";
+  }
+  
+  // Extract text content
+  let textContent = "";
+  const textChunks = turnElement.querySelectorAll('ms-text-chunk');
+  for (const textChunk of textChunks) {
+    if (textChunk.closest('ms-thought-chunk')) continue; // Skip thinking content
+    
+    const cmarkNode = textChunk.querySelector('ms-cmark-node');
+    if (cmarkNode && cmarkNode.innerText.trim()) {
+      textContent = cmarkNode.innerText.trim();
+      break;
+    }
+  }
+  
+  return { textContent, role };
+}
+
+// --- TURN-ID REFRESH DETECTION & REMAPPING FUNCTIONS ---
+
+// Detect if page was refreshed by comparing stored turn-ids with current DOM
+function detectPageRefresh(chatId, callback) {
+  if (!chatId) {
+    callback(false);
+    return;
+  }
+  
+  chrome.storage.local.get([`analysis_data_${chatId}`], (data) => {
+    const cachedData = data[`analysis_data_${chatId}`];
+    if (!cachedData || !cachedData.lastKnownTurnIds) {
+      callback(false); // No stored data to compare
+      return;
+    }
+    
+    const storedTurnIds = cachedData.lastKnownTurnIds;
+    const currentTurnIds = getCurrentDomTurnIds();
+    
+    // Check if any stored turn-id exists in current DOM
+    const hasMatchingIds = storedTurnIds.some(turnId => document.getElementById(turnId));
+    
+    callback(!hasMatchingIds); // Refresh detected if no matches found
+  });
+}
+
+// Get all current turn-ids from DOM
+function getCurrentDomTurnIds() {
+  const allTurns = Array.from(document.querySelectorAll('ms-chat-turn'));
+  return allTurns.map(turn => turn.id).filter(id => id);
+}
+
+// Generate fresh integer-to-turn-id mapping from current DOM
+function generateIntegerMapping() {
+  const allTurns = Array.from(document.querySelectorAll('ms-chat-turn'));
+  const mapping = {};
+  let messageSequence = 0;
+  
+  allTurns.forEach(turn => {
+    if (isThinkingOnlyTurn(turn)) return; // Skip thinking-only turns
+    
+    messageSequence++;
+    mapping[messageSequence] = turn.id;
+  });
+  
+  return {
+    integerToTurnIdMap: mapping,
+    lastKnownTurnIds: getCurrentDomTurnIds(),
+    messageCount: messageSequence
+  };
+}
+
+// Remap turn-ids after page refresh detection
+function remapTurnIds(chatId, callback) {
+  if (!chatId) {
+    callback(false);
+    return;
+  }
+  
+  // Generate new mapping from current DOM
+  const newMapping = generateIntegerMapping();
+  
+  // Update stored analysis data with new turn-id mappings
+  chrome.storage.local.get([`analysis_data_${chatId}`], (data) => {
+    const cachedData = data[`analysis_data_${chatId}`];
+    if (!cachedData) {
+      callback(false);
+      return;
+    }
+    
+    // Update the cached data with new mappings
+    const updatedData = {
+      ...cachedData,
+      integerToTurnIdMap: newMapping.integerToTurnIdMap,
+      lastKnownTurnIds: newMapping.lastKnownTurnIds,
+      messageCount: newMapping.messageCount
+    };
+    
+    // Save updated data
+    chrome.storage.local.set({
+      [`analysis_data_${chatId}`]: updatedData
+    }, () => {
+      callback(true);
+    });
+  });
+}
+
 // Process scraped history into structured format - reusable by multiple functions
 function processScrapedHistory(scrapedHistory, options = {}) {
   const { 
@@ -1089,8 +1243,13 @@ function processScrapedHistory(scrapedHistory, options = {}) {
       if (isAnalysisPrompt) {
         const placeholderText = "Chat history skipped because it was meant for the analysis prompt, no need to reflect to this content.";
         
+        // Generate stable message identifier
+        const stableId = generateStableMessageId(placeholderText, message.role, messageSequence);
+        
         const processedMessage = { 
-          turnId: message.turnId, // Use turnId as primary identifier
+          turnId: message.turnId, // Keep original turnId for backward compatibility
+          stableId: stableId, // New stable identifier based on content
+          messageSequence: messageSequence, // Add sequence number
           role: message.role, 
           richContent: placeholderText,
           textContent: placeholderText,
@@ -1101,12 +1260,17 @@ function processScrapedHistory(scrapedHistory, options = {}) {
         processedHistory.push(processedMessage);
         
         if (includeInPrompt) {
-          historyForPrompt += `MESSAGE ${messageSequence} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${placeholderText}\n\n---\n\n`;
+          historyForPrompt += `MESSAGE ${messageSequence} (${message.role}):\n${placeholderText}\n\n---\n\n`;
         }
       } else {
         // Regular message - include normally
+        // Generate stable message identifier
+        const stableId = generateStableMessageId(message.textContent, message.role, messageSequence);
+        
         const processedMessage = { 
-          turnId: message.turnId, // Use turnId as primary identifier
+          turnId: message.turnId, // Keep original turnId for backward compatibility
+          stableId: stableId, // New stable identifier based on content
+          messageSequence: messageSequence, // Add sequence number
           role: message.role, 
           richContent: message.richContent,
           textContent: message.textContent,
@@ -1125,7 +1289,7 @@ function processScrapedHistory(scrapedHistory, options = {}) {
             messageText = attachmentInfo + (messageText ? '\n\n' + messageText : '');
           }
           
-          historyForPrompt += `MESSAGE ${messageSequence} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${messageText}\n\n---\n\n`;
+          historyForPrompt += `MESSAGE ${messageSequence} (${message.role}):\n${messageText}\n\n---\n\n`;
         }
       }
   });
@@ -1201,7 +1365,7 @@ FIRST CODE BLOCK - JSON (structured gitGraph):
     {
       "type": "commit",
       "branch": "main",
-      "id": "turn-XXXX",
+      "id": "1",
       "message": "Branch Name | Optional description",
       "branch_hint": "Branch Name"
     },
@@ -1217,7 +1381,7 @@ FIRST CODE BLOCK - JSON (structured gitGraph):
   ]
 }
   Rules:
-- JSON actions must include ALL messages with their exact turnIds
+- JSON actions must include ALL messages with their integer IDs (1, 2, 3, etc.)
 - Use "branch" and "checkout" actions to represent conversation flow
 \`\`\`
 
@@ -1320,23 +1484,28 @@ function storeAnalysisData(turnElement, analysisData) {
   const timestamp = Date.now();
   
   if (chatId && turnId && analysisData) {
+    // Generate current integer mapping for refresh detection
+    const currentMapping = generateIntegerMapping();
+    
     // Store both reference data and cached analysis data
     chrome.storage.local.set({ 
       // Reference data (existing)
       [`analysis_turn_${chatId}`]: turnId,
       [`analysis_completed_${chatId}`]: timestamp,
       
-      // NEW: Cached analysis data for offline access
+      // Enhanced cached analysis data with refresh detection support
       [`analysis_data_${chatId}`]: {
         turnId: turnId,
         timestamp: timestamp,
         jsonData: analysisData.json,
         mermaidData: analysisData.mermaid,
-        branchMap: analysisData.branchMap
+        branchMap: analysisData.branchMap,
+        // NEW: Integer mapping and refresh detection data
+        integerToTurnIdMap: currentMapping.integerToTurnIdMap,
+        lastKnownTurnIds: currentMapping.lastKnownTurnIds,
+        messageCount: currentMapping.messageCount
       }
     });
-    console.log(`Stored analysis data cache: ${turnId} for chat ${chatId}`);
-    console.log(`Cached data includes: JSON=${!!analysisData.json}, Mermaid=${!!analysisData.mermaid}, Branches=${Object.keys(analysisData.branchMap || {}).length}`);
   }
 }
 
@@ -1484,13 +1653,13 @@ function getLatestAnalysisFromDom() {
             if (gitGraph && gitGraph.type === 'gitGraph' && Array.isArray(gitGraph.actions)) {
               gitGraph.actions.forEach(action => {
                 if (action && action.type === 'commit' && action.id) {
-                  const turnId = String(action.id);
+                  const messageId = String(action.id); // Now integer ID from AI response
                   const branchName = String(action.branch_hint || action.branch || '').trim();
                   if (!branchName) {
                     return;
                   }
-                  // Use turnId as key instead of sequential numbers
-                  branchMap[turnId] = { thread: branchName, turnId };
+                  // Use integer ID as key for branch mapping
+                  branchMap[messageId] = { thread: branchName, messageId: parseInt(messageId) };
                 }
               });
             }
@@ -1925,6 +2094,55 @@ async function goToBranch(branchName) {
         return; // Success, no need for careful navigation
       }
     }
+    
+    // Step 2.5: NEW - Content-based fallback when turn IDs don't match (after page refresh)
+    // Get the original analysis prompt to extract message content and sequence info
+    const chatId = getCurrentChatId();
+    if (chatId) {
+      chrome.storage.local.get([`analysis_data_${chatId}`], (data) => {
+        const cachedData = data[`analysis_data_${chatId}`];
+        if (cachedData && cachedData.originalMessages) {
+          // Try to find messages by content matching
+          for (const originalMsg of cachedData.originalMessages) {
+            if (analysis.branchMap[originalMsg.turnId] && 
+                analysis.branchMap[originalMsg.turnId].thread === branchName) {
+              
+              // Find this message in current DOM by content
+              const foundElement = findMessageByContent(
+                originalMsg.textContent, 
+                originalMsg.role, 
+                originalMsg.messageSequence
+              );
+              
+              if (foundElement) {
+                // Found by content! Navigate and highlight
+                foundElement.scrollIntoView({ 
+                  behavior: 'smooth', 
+                  block: 'center',
+                  inline: 'nearest'
+                });
+                
+                foundElement.style.transition = 'background-color 0.3s ease';
+                foundElement.style.backgroundColor = '#fff3cd';
+                setTimeout(() => {
+                  foundElement.style.backgroundColor = '';
+                }, 2000);
+                return; // Success
+              }
+            }
+          }
+        }
+        
+        // If content matching also fails, proceed with careful navigation
+        proceedWithCarefulNavigation();
+      });
+    } else {
+      // No chat ID, proceed with careful navigation
+      proceedWithCarefulNavigation();
+    }
+  }
+  
+  function proceedWithCarefulNavigation() {
     
     // Step 3: If not found in current DOM, show progress overlay and search carefully
     showProgressOverlay();

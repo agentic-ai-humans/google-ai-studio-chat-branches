@@ -22,9 +22,11 @@ When you open the extension on a chat that hasn't been analyzed yet, you'll see:
 **What happens when you click "New Analysis":**
 1. The extension scrolls through your entire chat
 2. It creates a special prompt for the AI to analyze your conversation
-3. **The prompt gets exported to a downloadable file** (bypasses input length limits!)
-4. You attach the downloaded file to your message and press Send
-5. The AI responds with a breakdown of your conversation topics
+3. **The prompt uses simple integer IDs** (MESSAGE 1, MESSAGE 2, etc.) - no complex turn-ids
+4. **The prompt gets exported to a downloadable file** (bypasses input length limits!)
+5. You attach the downloaded file to your message and press Send
+6. The AI responds with a clean analysis using integer IDs only
+7. **Internal mapping**: Extension maintains integer-to-turn-id mapping for navigation
 
 ---
 
@@ -436,12 +438,31 @@ This covers all the major use cases and edge cases for the extension!
 2. `showProgressOverlay()` displays center overlay on main page
 3. `climbAndScrapeHistory()` scrolls through chat
 4. Progress updates: "Scrolling through chat: X/Y messages"
-5. `exportPromptToFile()` creates and downloads analysis prompt file
+5. `exportPromptToFile()` creates analysis prompt with **simple integer IDs** (MESSAGE 1, MESSAGE 2, etc.)
+   - **Internal storage**: Maps integer IDs to current turn-ids for navigation
+   - **User-visible prompt**: Contains only clean integer sequence numbers
+   - **No turn-ids exposed** in prompt file or AI response
 6. `hideProgressOverlay()` after 5 seconds with file export completion message
 7. User manually attaches downloaded file and clicks Send in AI Studio
-8. AI responds with analysis
+8. AI responds with analysis using integer IDs only
 9. **If user reopens popup during operation:** UC-11 (potential conflicts)
 10. **After operation completes:** Next popup open → UC-04 or UC-05
+
+---
+
+### **UF-01.5: Page Refresh Detection & Turn-ID Remapping**
+**Trigger:** User returns to chat after page refresh/reload
+**Detection Logic:**
+1. **Check stored turn-ids** against current DOM turn-ids
+2. **If mismatch detected**: Page was refreshed, turn-ids regenerated
+3. **Trigger remapping**: Re-scan current chat to build new integer-to-turn-id mapping
+4. **Update internal storage**: Replace old turn-id mappings with new ones
+5. **Preserve branch assignments**: Keep integer-based branch mappings intact
+
+**Implementation Notes:**
+- **Detection happens**: On popup open, before any navigation operations
+- **Remapping scope**: Only updates turn-id mappings, preserves all analysis data
+- **User impact**: Transparent - all features continue working normally
 
 ---
 
@@ -450,20 +471,25 @@ This covers all the major use cases and edge cases for the extension!
 **Steps:**
 1. `goToBranch(branchName)` called
 2. Try `getLatestAnalysisFromDom()` first
-3. If not found, use cached `branchMap`
-4. Find target turn IDs for selected branch
-5. **Direct DOM Search:** Try to find turn element directly in current DOM using `document.getElementById(turnId)`
-6. **If found directly:** 
+3. If not found, use cached `branchMap` with integer-based branch assignments
+4. **Refresh Detection**: Check if stored turn-ids match current DOM turn-ids
+5. **If turn-ids match**: Use direct DOM search with `document.getElementById(turnId)`
+6. **If turn-ids don't match (page refreshed)**: 
+   - **Trigger UF-01.5**: Re-scan chat to rebuild integer-to-turn-id mapping
+   - **Update internal mappings**: Replace old turn-ids with new ones
+   - **Continue with updated mappings**: Use new turn-ids for navigation
+7. **Direct DOM Search:** Try to find turn element using current turn-ids
+8. **If found directly:** 
    - Jump to turn immediately, highlight with yellow background for 2 seconds
    - **Popup remains open** (no long operation needed)
-7. **If not found in current DOM:** 
+9. **If not found in current DOM:** 
    - **Popup closes immediately** - User sees main AI Studio page
    - Show progress overlay: "Searching for branch messages..."
-8. **Careful Navigation:** Step by step scroll from bottom to top through chat history
-9. **Progress Updates:** "Searching through chat: X/Y messages processed"
-10. **When target found:** Hide progress overlay, `scrollIntoView()` to target turn
-11. Highlight with yellow background for 2 seconds
-12. **If user reopens popup during search:** UC-11 (potential conflicts)
+10. **Careful Navigation:** Step by step scroll from bottom to top through chat history
+11. **Progress Updates:** "Searching through chat: X/Y messages processed"
+12. **When target found:** Hide progress overlay, `scrollIntoView()` to target turn
+13. Highlight with yellow background for 2 seconds
+14. **If user reopens popup during search:** UC-11 (potential conflicts)
 
 ---
 
@@ -615,6 +641,20 @@ This covers all the major use cases and edge cases for the extension!
 
 ---
 
+### **EF-10: Page Refresh Turn-ID Mismatch**
+**Trigger:** User refreshes page, turn-ids regenerate, stored mappings become invalid
+**Detection:** Stored turn-ids don't exist in current DOM when attempting navigation
+**Processing:** 
+1. **Detect mismatch**: Compare `lastKnownTurnIds` with current DOM turn-ids
+2. **Trigger remapping**: Re-scan current chat using message position and content
+3. **Rebuild mappings**: Create new integer-to-turn-id mappings
+4. **Update storage**: Replace old turn-id references with new ones
+5. **Resume operation**: Continue with updated mappings
+**Response:** Transparent remapping - user sees brief "Updating mappings..." message
+**User Impact:** **Seamless experience** - all features work normally after brief update
+
+---
+
 ## **Storage Schema**
 
 ### **Reference Data**
@@ -631,12 +671,32 @@ This covers all the major use cases and edge cases for the extension!
   "analysis_data_chat_abc123": {
     "turnId": "turn-456789",
     "timestamp": 1672531200000,
-    "jsonData": "{\"type\":\"gitGraph\",\"actions\":[...]}",
-    "mermaidData": "gitGraph\n    commit id: \"Initial\"...",
+    "jsonData": "{\"type\":\"gitGraph\",\"actions\":[...]}",  // Uses integer IDs only
+    "mermaidData": "gitGraph\n    commit id: \"Initial\"...", // Uses integer IDs only
     "branchMap": {
-      "turn-123": { "thread": "Feature A", "turnId": "turn-123" },
-      "turn-456": { "thread": "Bug Fix", "turnId": "turn-456" }
-    }
+      "1": { "thread": "Feature A", "messageId": 1, "currentTurnId": "turn-123" },
+      "3": { "thread": "Bug Fix", "messageId": 3, "currentTurnId": "turn-456" }
+    },
+    "integerToTurnIdMap": {
+      "1": "turn-123",
+      "3": "turn-456",
+      "5": "turn-789"
+    },
+    "lastKnownTurnIds": ["turn-123", "turn-456", "turn-789"], // For refresh detection
+    "messageCount": 6
+  }
+}
+```
+
+### **Page Refresh Detection Data**
+```javascript
+{
+  "page_refresh_detected_chat_abc123": {
+    "detected": true,
+    "oldTurnIds": ["turn-123", "turn-456"],
+    "newTurnIds": ["turn-xyz", "turn-abc"],
+    "remappingCompleted": true,
+    "timestamp": 1672531300000
   }
 }
 ```
