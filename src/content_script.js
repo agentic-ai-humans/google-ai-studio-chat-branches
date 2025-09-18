@@ -1754,17 +1754,11 @@ async function openFilteredBranch(branchName) {
 
     const finalContentForNewChat = `Please continue the conversation based on the following context, which is a complete thread from a previous chat including its main branch context. This contains ${threadInfo.totalMessages} messages total (${threadInfo.mainBranchMessages} from main branch context + ${threadInfo.threadSpecificMessages} from the selected "${branchName}" thread). The conversation branches at message ${threadInfo.branchPoint || 'N/A'}. Preserve the code formatting and structure:${attachmentNotice}\n\n${filteredContent}`;
     
-    // Step 5: Copy to clipboard
-    updateProgressOverlay("Copying to clipboard...", 95);
+    // Step 5: Export to file
+    updateProgressOverlay("Creating file...", 95);
     
-    // Try to focus the document first
-    if (document.hasFocus && !document.hasFocus()) {
-      window.focus();
-      document.body.focus();
-    }
-    
-    // Use fallback method for content scripts
-    await copyToClipboardContentScript(finalContentForNewChat, branchName, threadInfo);
+    // Export branch content to file
+    await exportBranchToFile(finalContentForNewChat, branchName, threadInfo);
     
     // Hide progress overlay
     hideProgressOverlay();
@@ -1777,43 +1771,37 @@ async function openFilteredBranch(branchName) {
   
 }
 
-async function copyToClipboardContentScript(text, branchName, threadInfo) {
-  // Try modern clipboard API first
+async function exportBranchToFile(text, branchName, threadInfo) {
   try {
-    await navigator.clipboard.writeText(text);
-    console.log(`Branch "${branchName}" copied to clipboard`);
-    alert(`The full history for the "${branchName}" thread has been copied to your clipboard. Please paste it into a new chat.`);
-    return;
-  } catch (err) {
-    // Modern API failed, try legacy method
-  }
-  
-  // Fallback to execCommand
-  try {
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.style.position = 'fixed';
-    textArea.style.left = '-999999px';
-    textArea.style.top = '-999999px';
-    textArea.style.zIndex = '9999';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
+    const chatId = getCurrentChatId();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const safeBranchName = branchName.replace(/[^a-zA-Z0-9]/g, '-');
+    const filename = `chat-branch-${safeBranchName}-${chatId || 'unknown'}-${timestamp}.txt`;
     
-    const successful = document.execCommand('copy');
-    document.body.removeChild(textArea);
+    // Create blob with the branch content
+    const blob = new Blob([text], { type: 'text/plain' });
     
-    if (successful) {
-      console.log(`Branch "${branchName}" copied to clipboard (fallback)`);
-      alert(`The full history for the "${branchName}" thread has been copied to your clipboard. Please paste it into a new chat.`);
-      return;
-    }
-  } catch (err) {
-    // Both methods failed
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    
+    // Trigger download
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    console.log(`Branch "${branchName}" exported to file: ${filename}`);
+    
+  } catch (error) {
+    console.error('Failed to export branch to file:', error);
+    alert(`Failed to export branch "${branchName}" to file. Please try again.`);
   }
-  
-  console.error(`Failed to copy branch "${branchName}" to clipboard`);
-  alert(`Failed to copy branch "${branchName}" to clipboard. Please try again.`);
 }
 
 
@@ -2033,35 +2021,10 @@ async function exportPromptToFile(promptText) {
     
     console.log(`Analysis prompt exported to file: ${filename}`);
     
-    // Also insert a short message in the input pane to guide the user
-    const shortMessage = `Please find the complete analysis prompt in the attached file: ${filename}
-
-Instructions:
-1. Attach the downloaded file to this message
-2. Send the message to run the analysis
-
-The file contains the full chat history and analysis instructions that were too long for the input pane.`;
-    
-    insertPrompt(shortMessage);
-    
   } catch (error) {
     console.error('Failed to export prompt to file:', error);
-    
-    // Fallback: try to insert a truncated version
-    const maxLength = 8000; // Conservative limit
-    if (promptText.length > maxLength) {
-      const truncatedPrompt = promptText.substring(0, maxLength) + '\n\n[TRUNCATED - Full prompt was too long for input pane]';
-      insertPrompt(truncatedPrompt);
-    } else {
-      insertPrompt(promptText);
-    }
+    alert('Failed to export analysis prompt to file. Please try again.');
   }
 }
 
-function insertPrompt(text) {
-  const promptTextarea = document.querySelector('.prompt-input-wrapper textarea') || document.querySelector('ms-autosize-textarea textarea');
-  if (promptTextarea) {
-    promptTextarea.value = text;
-    promptTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-}
+// insertPrompt function removed - we now use file-only export approach

@@ -181,12 +181,34 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
 
-  function copyToClipboard(text, type) {
-    navigator.clipboard.writeText(text).then(() => {
-      console.log(`${type} copied to clipboard`);
-    }).catch(err => {
-      console.error('Failed to copy to clipboard:', err);
-    });
+  function exportToFile(text, type, extension = 'txt') {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      const filename = `chat-${type.toLowerCase()}-${timestamp}.${extension}`;
+      
+      // Create blob with the content
+      const blob = new Blob([text], { type: 'text/plain' });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      
+      // Trigger download
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      console.log(`${type} exported to file: ${filename}`);
+    } catch (err) {
+      console.error(`Failed to export ${type} to file:`, err);
+      alert(`Failed to export ${type} to file. Please try again.`);
+    }
   }
 
   function populateBranchSelector(analysisData) {
@@ -433,9 +455,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Copy buttons
   copyJsonButton?.addEventListener('click', () => {
     if (currentAnalysisData?.jsonData) {
-      // Briefly disable buttons during copy operation
+      // Briefly disable buttons during export operation
       disableAllButtons();
-      copyToClipboard(currentAnalysisData.jsonData, 'JSON');
+      exportToFile(currentAnalysisData.jsonData, 'JSON', 'json');
       // Re-enable buttons after a short delay
       setTimeout(() => {
         enableAllButtons();
@@ -445,9 +467,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   copyMermaidButton?.addEventListener('click', () => {
     if (currentAnalysisData?.mermaidData) {
-      // Briefly disable buttons during copy operation
+      // Briefly disable buttons during export operation
       disableAllButtons();
-      copyToClipboard(currentAnalysisData.mermaidData, 'Mermaid');
+      exportToFile(currentAnalysisData.mermaidData, 'Mermaid', 'mmd');
       // Re-enable buttons after a short delay
       setTimeout(() => {
         enableAllButtons();
@@ -511,9 +533,9 @@ document.addEventListener('DOMContentLoaded', () => {
       
     } catch (err) {
       console.error('SG: Failed to create pako URL:', err);
-      // Final fallback: just open mermaid.live and copy the code to clipboard
-      copyToClipboard(mermaidCode, 'Mermaid (fallback)');
-      console.log('SG: Copied Mermaid to clipboard as fallback');
+      // Final fallback: export file and open mermaid.live for manual import
+      exportToFile(mermaidCode, 'Mermaid-fallback', 'mmd');
+      console.log('SG: Exported Mermaid to file as fallback');
       return 'https://mermaid.live/edit';
     }
   }
@@ -532,8 +554,8 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.tabs.create({ url: mermaidUrl });
       } catch (err) {
         console.error('SG: Error creating mermaid URL:', err);
-        // Fallback: copy to clipboard and open mermaid.live
-        copyToClipboard(currentAnalysisData.mermaidData, 'Mermaid (error fallback)');
+        // Fallback: export to file and open mermaid.live
+        exportToFile(currentAnalysisData.mermaidData, 'Mermaid-error-fallback', 'mmd');
         chrome.tabs.create({ url: 'https://mermaid.live/edit' });
       } finally {
         // Re-enable buttons after operation completes
