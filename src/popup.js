@@ -214,18 +214,83 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  showGraphButton?.addEventListener('click', () => {
+  // Helper function to create mermaid.live URL with proper pako compression
+  async function createMermaidLiveUrl(mermaidCode) {
+    try {
+      // Step 1: Create JSON payload
+      const payload = {
+        code: mermaidCode.trim(),
+        mermaid: { theme: 'default' }
+      };
+      
+      // Step 2: Convert to JSON string and UTF-8 encode
+      const jsonString = JSON.stringify(payload);
+      const utf8Bytes = new TextEncoder().encode(jsonString);
+      
+      // Step 3: Compress using browser's compression API (if available)
+      let compressed;
+      if ('CompressionStream' in window) {
+        console.log('SG: Using browser compression API');
+        const stream = new CompressionStream('deflate');
+        const writer = stream.writable.getWriter();
+        const reader = stream.readable.getReader();
+        
+        writer.write(utf8Bytes);
+        writer.close();
+        
+        const chunks = [];
+        let done = false;
+        while (!done) {
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) chunks.push(value);
+        }
+        
+        compressed = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
+        let offset = 0;
+        for (const chunk of chunks) {
+          compressed.set(chunk, offset);
+          offset += chunk.length;
+        }
+      } else {
+        console.log('SG: Browser compression not available, using fallback');
+        // Fallback: just use the raw bytes (not ideal, but will work for small diagrams)
+        compressed = utf8Bytes;
+      }
+      
+      // Step 4: Base64-URL encode the compressed data
+      const base64 = btoa(String.fromCharCode(...compressed));
+      const urlSafeBase64 = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      // Step 5: Construct the Mermaid Live URL
+      const mermaidUrl = `https://mermaid.live/edit#pako:${urlSafeBase64}`;
+      console.log('SG: Generated pako URL with length:', mermaidUrl.length);
+      
+      return mermaidUrl;
+      
+    } catch (err) {
+      console.error('SG: Failed to create pako URL:', err);
+      // Final fallback: just open mermaid.live and copy the code to clipboard
+      copyToClipboard(mermaidCode, 'Mermaid (fallback)');
+      console.log('SG: Copied Mermaid to clipboard as fallback');
+      return 'https://mermaid.live/edit';
+    }
+  }
+
+  showGraphButton?.addEventListener('click', async () => {
     if (currentAnalysisData?.mermaidData) {
       console.log('SG: Mermaid data available:', !!currentAnalysisData.mermaidData);
       console.log('SG: Mermaid preview:', currentAnalysisData.mermaidData.substring(0, 100) + '...');
       
       try {
-        const base64Data = btoa(currentAnalysisData.mermaidData.trim());
-        const mermaidUrl = `https://mermaid.live/edit#base64:${base64Data}`;
-        console.log('SG: Opening mermaid.live with URL length:', mermaidUrl.length);
+        const mermaidUrl = await createMermaidLiveUrl(currentAnalysisData.mermaidData);
+        console.log('SG: Opening mermaid.live with URL:', mermaidUrl.substring(0, 100) + '...');
         chrome.tabs.create({ url: mermaidUrl });
       } catch (err) {
-        console.error('SG: Failed to create mermaid URL:', err);
+        console.error('SG: Error creating mermaid URL:', err);
+        // Fallback: copy to clipboard and open mermaid.live
+        copyToClipboard(currentAnalysisData.mermaidData, 'Mermaid (error fallback)');
+        chrome.tabs.create({ url: 'https://mermaid.live/edit' });
       }
     } else {
       console.log('SG: No Mermaid data available');
