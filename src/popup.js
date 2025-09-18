@@ -93,8 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         console.log('No analysis data found in DOM');
         
-        // Check if we have stored analysis that's not visible
-        if (currentChatInfo && currentChatInfo.storedTurnId && !currentChatInfo.analysisTurnFound) {
+        // Check if we have stored analysis that's not visible OR corrupted
+        if (currentChatInfo && currentChatInfo.storedTurnId && 
+            (!currentChatInfo.analysisTurnFound || !currentChatInfo.hasAnalysis)) {
           showAnalysisNotFoundOptions();
         } else {
           // No analysis found and no stored reference - hide analysis features
@@ -120,27 +121,19 @@ document.addEventListener('DOMContentLoaded', () => {
     
     messageDiv.innerHTML = `
       <div style="margin-bottom: 10px; font-weight: bold;">
-        📊 Analysis exists but not visible in current view
+        Analysis exists but not visible in current view
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+      <div style="margin-top: 10px;">
         <button id="searchAnalysisBtn" style="
           background-color: #2ecc71; 
           color: white; 
           border: none; 
-          padding: 8px; 
+          padding: 10px 16px; 
           border-radius: 4px; 
           cursor: pointer;
-          font-size: 0.8em;
-        ">🔍 Find Analysis</button>
-        <button id="newAnalysisBtn" style="
-          background-color: #3498db; 
-          color: white; 
-          border: none; 
-          padding: 8px; 
-          border-radius: 4px; 
-          cursor: pointer;
-          font-size: 0.8em;
-        ">📝 New Analysis</button>
+          font-size: 0.9em;
+          width: 100%;
+        ">Find Analysis</button>
       </div>
     `;
     
@@ -152,15 +145,14 @@ document.addEventListener('DOMContentLoaded', () => {
       sendMessageToContentScript({ action: 'scrollToAnalysis' }, (response) => {
         if (response && response.status === 'found') {
           window.close(); // Close popup after successful navigation
+        } else if (response && response.status === 'corrupted') {
+          alert('Analysis data is corrupted, please run new analysis');
+          messageDiv.remove();
         } else {
           alert('Could not find the analysis. It may have been deleted.');
           messageDiv.remove();
         }
       });
-    });
-    
-    messageDiv.querySelector('#newAnalysisBtn').addEventListener('click', () => {
-      messageDiv.remove();
     });
   }
 

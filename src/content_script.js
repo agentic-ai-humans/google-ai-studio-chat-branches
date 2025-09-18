@@ -257,20 +257,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (turnId) {
             const turnElement = document.getElementById(turnId);
             if (turnElement) {
-              turnElement.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'center',
-                inline: 'nearest'
-              });
+              // Check if analysis contains valid data
+              const domExtract = extractJsonAndMermaidFromDom(turnElement);
+              const hasValidData = !!(domExtract && (domExtract.json || domExtract.mermaid));
               
-              // Add highlight effect
-              turnElement.style.transition = 'background-color 0.3s ease';
-              turnElement.style.backgroundColor = '#fff3cd';
-              setTimeout(() => {
-                turnElement.style.backgroundColor = '';
-              }, 2000);
-              
-              sendResponse({ status: 'found' });
+              if (hasValidData) {
+                // Analysis is valid - scroll to it
+                turnElement.scrollIntoView({ 
+                  behavior: 'smooth', 
+                  block: 'center',
+                  inline: 'nearest'
+                });
+                
+                // Add highlight effect
+                turnElement.style.transition = 'background-color 0.3s ease';
+                turnElement.style.backgroundColor = '#fff3cd';
+                setTimeout(() => {
+                  turnElement.style.backgroundColor = '';
+                }, 2000);
+                
+                sendResponse({ status: 'found' });
+              } else {
+                // Analysis exists but is corrupted
+                sendResponse({ status: 'corrupted' });
+              }
             } else {
               sendResponse({ status: 'not_found' });
             }
@@ -1615,6 +1625,7 @@ async function copyToClipboardContentScript(text, branchName, threadInfo) {
   try {
     await navigator.clipboard.writeText(text);
     console.log(`Branch "${branchName}" copied to clipboard`);
+    alert(`The full history for the "${branchName}" thread has been copied to your clipboard. Please paste it into a new chat.`);
     return;
   } catch (err) {
     // Modern API failed, try legacy method
@@ -1637,6 +1648,7 @@ async function copyToClipboardContentScript(text, branchName, threadInfo) {
     
     if (successful) {
       console.log(`Branch "${branchName}" copied to clipboard (fallback)`);
+      alert(`The full history for the "${branchName}" thread has been copied to your clipboard. Please paste it into a new chat.`);
       return;
     }
   } catch (err) {
@@ -1644,6 +1656,7 @@ async function copyToClipboardContentScript(text, branchName, threadInfo) {
   }
   
   console.error(`Failed to copy branch "${branchName}" to clipboard`);
+  alert(`Failed to copy branch "${branchName}" to clipboard. Please try again.`);
 }
 
 
