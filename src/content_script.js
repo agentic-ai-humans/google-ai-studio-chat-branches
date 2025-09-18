@@ -167,16 +167,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           analysisTurnFound = !!turnElement;
           
           if (analysisTurnFound) {
-            // Verify it still contains analysis data
+            // Verify it still contains valid analysis data
             const domExtract = extractJsonAndMermaidFromDom(turnElement);
             hasVisibleAnalysis = !!(domExtract && (domExtract.json || domExtract.mermaid));
           }
         }
         
-        // Fallback: check DOM for any analysis if stored turn not found
+        // Fallback: check DOM for any analysis if stored turn not found or corrupted
         if (!hasVisibleAnalysis) {
           const analysis = getLatestAnalysisFromDom();
-          hasVisibleAnalysis = analysis && analysis.hasData;
+          if (analysis && analysis.hasData) {
+            hasVisibleAnalysis = true;
+            analysisTurnFound = true; // Update this since we found valid analysis in DOM
+          }
         }
         
         sendResponse({
@@ -213,22 +216,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ status: 'ok' });
       break;
     case 'getAnalysisData':
-      // Get analysis data from DOM for popup
+      // Get analysis data from DOM for popup, with cache fallback
       const analysisData = getLatestAnalysisFromDom();
       if (analysisData && analysisData.hasData) {
+        // Found in DOM - use fresh data
         sendResponse({
           status: 'ok',
           hasData: true,
           jsonData: analysisData.json,
           mermaidData: analysisData.mermaid,
-          branchMap: analysisData.branchMap
+          branchMap: analysisData.branchMap,
+          source: 'dom'
         });
       } else {
-        sendResponse({
-          status: 'ok',
-          hasData: false
+        // Not found in DOM - try cache fallback
+        getAnalysisFromCache((cachedData) => {
+          if (cachedData && cachedData.hasData) {
+            sendResponse({
+              status: 'ok',
+              hasData: true,
+              jsonData: cachedData.json,
+              mermaidData: cachedData.mermaid,
+              branchMap: cachedData.branchMap,
+              source: 'cache',
+              timestamp: cachedData.timestamp
+            });
+          } else {
+            sendResponse({
+              status: 'ok',
+              hasData: false,
+              source: 'none'
+            });
+          }
         });
       }
+      return true; // Will respond asynchronously for cache case
       break;
     case 'openBranchInNewChat':
       if (request.branchName) {
@@ -1278,7 +1300,34 @@ ${historyForPrompt}
   // No need to watch - we'll detect and store when user opens popup next time 
 }
 
-// Helper function to store analysis turn-id when we detect it
+// Enhanced function to store both turn-id reference AND parsed analysis data
+function storeAnalysisData(turnElement, analysisData) {
+  const chatId = getCurrentChatId();
+  const turnId = turnElement.id;
+  const timestamp = Date.now();
+  
+  if (chatId && turnId && analysisData) {
+    // Store both reference data and cached analysis data
+    chrome.storage.local.set({ 
+      // Reference data (existing)
+      [`analysis_turn_${chatId}`]: turnId,
+      [`analysis_completed_${chatId}`]: timestamp,
+      
+      // NEW: Cached analysis data for offline access
+      [`analysis_data_${chatId}`]: {
+        turnId: turnId,
+        timestamp: timestamp,
+        jsonData: analysisData.json,
+        mermaidData: analysisData.mermaid,
+        branchMap: analysisData.branchMap
+      }
+    });
+    console.log(`Stored analysis data cache: ${turnId} for chat ${chatId}`);
+    console.log(`Cached data includes: JSON=${!!analysisData.json}, Mermaid=${!!analysisData.mermaid}, Branches=${Object.keys(analysisData.branchMap || {}).length}`);
+  }
+}
+
+// Legacy function for backward compatibility
 function storeAnalysisTurnId(turnElement) {
   const chatId = getCurrentChatId();
   const turnId = turnElement.id;
@@ -1338,7 +1387,16 @@ function extractJsonAndMermaidFromDom(turnRoot) {
         if (json && !result.json) {
           result.json = json;
         }
-        // Combined blocks are handled by separate Mermaid panels - no text parsing needed
+        
+        // COMBINED BLOCK HANDLING: AI sometimes returns both JSON and Mermaid in one code block
+        // This is a documented use case due to AI prompt variability
+        if (!result.mermaid && code.includes('```mermaid')) {
+          const mermaidMatch = code.match(/```mermaid\s*([\s\S]*?)```/);
+          if (mermaidMatch && mermaidMatch[1]) {
+            result.mermaid = mermaidMatch[1].trim();
+            console.log('Extracted Mermaid from combined JSON+Mermaid block');
+          }
+        }
       } else if (/^Mermaid$/i.test(title)) {
         if (!result.mermaid) {
           result.mermaid = code.replace(/```/g, '').trim();
@@ -1419,21 +1477,54 @@ function getLatestAnalysisFromDom() {
           }
         }
         
-        // Store the turn-id when we find analysis (this happens when popup opens)
-        storeAnalysisTurnId(turn);
-        
-        return {
+        // Store both turn-id reference AND the parsed data for caching
+        const analysisResult = {
           json: domExtract.json,
           mermaid: domExtract.mermaid,
           branchMap: branchMap,
           hasData: true,
           turnId: turn.id
         };
+        
+        storeAnalysisData(turn, analysisResult);
+        
+        return analysisResult;
       }
     }
   }
   
   return null;
+}
+
+// NEW: Fallback function to load analysis from cache when DOM element is not available
+function getAnalysisFromCache(callback) {
+  const chatId = getCurrentChatId();
+  if (!chatId) {
+    callback(null);
+    return;
+  }
+  
+  chrome.storage.local.get([`analysis_data_${chatId}`], (data) => {
+    const cachedData = data[`analysis_data_${chatId}`];
+    
+    if (cachedData) {
+      console.log(`Loaded analysis from cache: ${cachedData.turnId}`);
+      console.log(`Cached data includes: JSON=${!!cachedData.jsonData}, Mermaid=${!!cachedData.mermaidData}, Branches=${Object.keys(cachedData.branchMap || {}).length}`);
+      
+      callback({
+        json: cachedData.jsonData,
+        mermaid: cachedData.mermaidData,
+        branchMap: cachedData.branchMap || {},
+        hasData: !!(cachedData.jsonData || cachedData.mermaidData),
+        turnId: cachedData.turnId,
+        fromCache: true,
+        timestamp: cachedData.timestamp
+      });
+    } else {
+      console.log('No cached analysis data found');
+      callback(null);
+    }
+  });
 }
 
 // Function to load analysis from DOM (for popup compatibility)

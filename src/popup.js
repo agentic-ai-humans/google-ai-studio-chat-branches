@@ -51,16 +51,41 @@ document.addEventListener('DOMContentLoaded', () => {
     
     branchSelector.innerHTML = '<option value="">Select a branch...</option>';
     
-    // Get branch names with counts from the branch map
+    // Get branch names with counts and latest message index from the branch map
     const branchCounts = {};
-    Object.values(analysisData.branchMap).forEach(data => {
+    const branchLatestIndex = {};
+    
+    Object.entries(analysisData.branchMap).forEach(([turnId, data]) => {
       if (data && data.thread) {
-        branchCounts[data.thread] = (branchCounts[data.thread] || 0) + 1;
+        const branchName = data.thread;
+        branchCounts[branchName] = (branchCounts[branchName] || 0) + 1;
+        
+        // Extract numeric index from turnId (e.g., "turn-12345" -> 12345)
+        // This assumes turnIds have a numeric component that reflects chronological order
+        const turnMatch = turnId.match(/(\d+)$/);
+        if (turnMatch) {
+          const turnIndex = parseInt(turnMatch[1], 10);
+          branchLatestIndex[branchName] = Math.max(branchLatestIndex[branchName] || 0, turnIndex);
+        }
       }
     });
     
-    // Sort and add to selector with message counts
-    Object.keys(branchCounts).sort().forEach(branchName => {
+    // Sort by most recent activity (highest turn index first), fallback to alphabetical
+    const sortedBranches = Object.keys(branchCounts).sort((a, b) => {
+      const indexA = branchLatestIndex[a] || 0;
+      const indexB = branchLatestIndex[b] || 0;
+      
+      // Primary sort: by most recent activity (descending)
+      if (indexB !== indexA) {
+        return indexB - indexA;
+      }
+      
+      // Secondary sort: alphabetical (ascending) for branches with same recency
+      return a.localeCompare(b);
+    });
+    
+    // Add sorted branches to selector with message counts
+    sortedBranches.forEach(branchName => {
       const option = document.createElement('option');
       option.value = branchName;
       const count = branchCounts[branchName];
@@ -72,15 +97,15 @@ document.addEventListener('DOMContentLoaded', () => {
   function loadAnalysisData() {
     sendMessageToContentScript({ action: 'getAnalysisData' }, (response) => {
       if (response && response.hasData) {
-        console.log('Analysis data found in DOM');
+        console.log(`Analysis data found (source: ${response.source})`);
         currentAnalysisData = {
           jsonData: response.jsonData,
           mermaidData: response.mermaidData,
           branchMap: response.branchMap
         };
         
-        // Show analysis sections
-        if (Object.keys(response.branchMap).length > 0) {
+        // UC-04 & UC-05: Analysis available (visible or cached) - show all features
+        if (Object.keys(response.branchMap || {}).length > 0) {
           filteringView.classList.remove('hidden');
           populateBranchSelector(currentAnalysisData);
         }
@@ -89,26 +114,41 @@ document.addEventListener('DOMContentLoaded', () => {
           mermaidSection.classList.remove('hidden');
         }
         
+        // UC-05: If data came from cache and analysis is not visible, show Find Analysis option
+        if (response.source === 'cache' && currentChatInfo && !currentChatInfo.analysisTurnFound) {
+          showAnalysisNotFoundOptions();
+        }
+        
         // Keep analyze button visible - users might want to run new analysis
       } else {
-        console.log('No analysis data found in DOM');
+        console.log('No analysis data found');
         
-        // Check if we have stored analysis that's not visible OR corrupted
-        if (currentChatInfo && currentChatInfo.storedTurnId && 
-            (!currentChatInfo.analysisTurnFound || !currentChatInfo.hasAnalysis)) {
-          showAnalysisNotFoundOptions();
-        } else {
-          // No analysis found and no stored reference - hide analysis features
-          filteringView.classList.add('hidden');
-          mermaidSection.classList.add('hidden');
+        // UC-06: Check if we have stored analysis that's corrupted or not visible
+        if (currentChatInfo && currentChatInfo.storedTurnId) {
+          if (!currentChatInfo.analysisTurnFound) {
+            // Analysis exists in storage but not found in DOM
+            showAnalysisNotFoundOptions();
+          } else if (!currentChatInfo.hasAnalysis) {
+            // Analysis found in DOM but corrupted
+            showCorruptedAnalysisOptions();
+          }
         }
+        
+        // UC-03: No analysis found and no stored reference - hide analysis features (basic mode)
+        filteringView.classList.add('hidden');
+        mermaidSection.classList.add('hidden');
       }
     });
   }
 
   function showAnalysisNotFoundOptions() {
+    // Remove any existing analysis messages first
+    const existingMessages = document.querySelectorAll('.analysis-message');
+    existingMessages.forEach(msg => msg.remove());
+    
     // Create a temporary message with options
     const messageDiv = document.createElement('div');
+    messageDiv.className = 'analysis-message';
     messageDiv.style.cssText = `
       background-color: #f39c12;
       color: white;
@@ -153,6 +193,56 @@ document.addEventListener('DOMContentLoaded', () => {
           messageDiv.remove();
         }
       });
+    });
+  }
+
+  function showCorruptedAnalysisOptions() {
+    // Remove any existing analysis messages first
+    const existingMessages = document.querySelectorAll('.analysis-message');
+    existingMessages.forEach(msg => msg.remove());
+    
+    // Create a temporary message for corrupted analysis
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'analysis-message';
+    messageDiv.style.cssText = `
+      background-color: #e74c3c;
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      text-align: center;
+      font-size: 0.9em;
+    `;
+    
+    messageDiv.innerHTML = `
+      <div style="margin-bottom: 10px; font-weight: bold;">
+        Analysis data is corrupted
+      </div>
+      <div style="margin-bottom: 10px; font-size: 0.8em;">
+        The analysis exists but contains invalid data.
+      </div>
+      <div style="margin-top: 10px;">
+        <button id="newAnalysisBtn" style="
+          background-color: #3498db; 
+          color: white; 
+          border: none; 
+          padding: 10px 16px; 
+          border-radius: 4px; 
+          cursor: pointer;
+          font-size: 0.9em;
+          width: 100%;
+        ">Run New Analysis</button>
+      </div>
+    `;
+    
+    // Insert before the analyze button
+    analyzeButton.parentNode.insertBefore(messageDiv, analyzeButton);
+    
+    // Add event listeners
+    messageDiv.querySelector('#newAnalysisBtn').addEventListener('click', () => {
+      // Trigger new analysis
+      sendMessageToContentScript({ action: 'analyzeAndPrepare' });
+      window.close();
     });
   }
 
@@ -309,17 +399,19 @@ document.addEventListener('DOMContentLoaded', () => {
     sendMessageToContentScript({ action: 'getCurrentChatInfo' }, (response) => {
       if (response && !response.isNewChat && response.chatId) {
         console.log('Valid chat page detected, chatId:', response.chatId);
-        console.log('Analysis turn found:', response.analysisTurnFound, 'Stored turn:', response.storedTurnId);
+        console.log('Analysis turn found:', response.analysisTurnFound, 'Has analysis:', response.hasAnalysis, 'Stored turn:', response.storedTurnId);
         
         currentChatInfo = response; // Store chat info for later use
         
+        // UC-03, UC-04, UC-05, UC-06: Show main view for valid chat pages
         mainView.classList.remove('hidden');
         incorrectDomainView.classList.add('hidden');
         
-        // Load analysis data from DOM
+        // Load analysis data from DOM and apply proper UI state based on use cases
         loadAnalysisData();
       } else {
         console.log('Not a valid chat page or new chat');
+        // UC-01, UC-02: Wrong domain or new chat - show error
         mainView.classList.add('hidden');
         incorrectDomainView.classList.remove('hidden');
       }
