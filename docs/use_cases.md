@@ -657,8 +657,8 @@ This covers all the major use cases and edge cases for the extension!
 3. **User confirmation**: User clicks "Refresh Mappings" button
 4. **Close popup**: Extension popup closes to show progress overlay
 5. **Trigger analysis**: Run full analysis operation (UF-01) to regenerate mappings
-6. **Update internal data**: Replace old turn-id mappings with new ones
-7. **Preserve existing analysis**: Old JSON/Mermaid in chat remains unchanged
+6. **Update storage data**: Replace old turn-id mappings with new ones, update JSON/Mermaid in storage
+7. **Preserve existing analysis**: Old JSON/Mermaid message in chat remains unchanged (no new chat message created)
 8. **Completion**: User can reopen popup with fully functional navigation
 
 **Response:** Analysis operation completes, mappings updated, navigation restored
