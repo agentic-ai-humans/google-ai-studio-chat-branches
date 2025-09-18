@@ -1404,13 +1404,15 @@ function extractJsonAndMermaidFromDom(turnRoot) {
         if (!result.mermaid && code.includes('```mermaid')) {
           const mermaidMatch = code.match(/```mermaid\s*([\s\S]*?)```/);
           if (mermaidMatch && mermaidMatch[1]) {
-            result.mermaid = mermaidMatch[1].trim();
+            // Clean HTML tags from Mermaid content (syntax highlighting)
+            result.mermaid = mermaidMatch[1].replace(/<[^>]*>/g, '').trim();
             console.log('Extracted Mermaid from combined JSON+Mermaid block');
           }
         }
       } else if (/^Mermaid$/i.test(title)) {
         if (!result.mermaid) {
-          result.mermaid = code.replace(/```/g, '').trim();
+          // Clean HTML tags from Mermaid content (syntax highlighting) and remove backticks
+          result.mermaid = code.replace(/```/g, '').replace(/<[^>]*>/g, '').trim();
         }
       }
     });
@@ -1433,7 +1435,14 @@ function extractFirstBalancedJson(text) {
     else if (ch === '}') depth--;
     if (depth === 0) {
       const slice = text.substring(start, i + 1);
-      try { JSON.parse(slice); return slice; } catch (_) { return null; }
+      try { 
+        // Clean HTML tags from JSON content (syntax highlighting) before parsing
+        const cleanJson = slice.replace(/<[^>]*>/g, '');
+        JSON.parse(cleanJson); 
+        return cleanJson; 
+      } catch (_) { 
+        return null; 
+      }
     }
   }
   return null;
