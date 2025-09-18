@@ -315,6 +315,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       return true; // Will respond asynchronously
       break;
+    case 'checkProgressOverlay':
+      // Check if progress overlay is currently visible (indicates active operation)
+      const hasActiveOverlay = !!(progressOverlay && document.getElementById('chat-analysis-progress'));
+      sendResponse({ hasActiveOverlay: hasActiveOverlay });
+      break;
   }
   return true;
 });
@@ -849,6 +854,12 @@ async function climbAndScrapeHistory() {
         // Send scroll progress update
         const processedTurns = totalTurns - turnIndex + 1;
         sendScrollProgress(processedTurns, totalTurns, 'climbing');
+        
+        // Also update the progress overlay if it's visible (for copy branch operations)
+        if (progressOverlay) {
+          const progress = 20 + Math.round((processedTurns / totalTurns) * 50); // 20-70% range
+          updateProgressOverlay(`Scrolling through chat: ${processedTurns}/${totalTurns} messages`, progress);
+        }
         
         
         // Check for cancellation
@@ -1548,81 +1559,115 @@ async function openFilteredBranch(branchName) {
   const chatId = getCurrentChatId();
   if (!chatId) return;
   
-  // Try to get analysis from current view first
-  let analysis = getLatestAnalysisFromDom();
+  // Show progress overlay
+  showProgressOverlay();
+  updateProgressOverlay("Copying branch history...", 5);
   
-  // If not found in current view, scroll to bottom to find latest analysis
-  if (!analysis || !analysis.branchMap) {
-    scrollToBottomOfChat();
-    // Wait for scroll to complete then try again
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    analysis = getLatestAnalysisFromDom();
+  try {
+    // Step 1: Prepare branch copy
+    updateProgressOverlay("Preparing branch copy...", 10);
     
+    // Try to get analysis from current view first
+    let analysis = getLatestAnalysisFromDom();
+    
+    // If not found in current view, try cache or scroll to find analysis
     if (!analysis || !analysis.branchMap) {
+      updateProgressOverlay("Looking for analysis data...", 15);
+      
+      // Try cache first
+      const cacheResult = await new Promise((resolve) => {
+        getAnalysisFromCache((cachedData) => {
+          resolve(cachedData);
+        });
+      });
+      
+      if (cacheResult && cacheResult.branchMap) {
+        analysis = cacheResult;
+      } else {
+        // Fallback: scroll to bottom to find latest analysis
+        scrollToBottomOfChat();
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        analysis = getLatestAnalysisFromDom();
+      }
+      
+      if (!analysis || !analysis.branchMap) {
+        hideProgressOverlay();
+        alert('Could not find analysis data. Please run a new analysis first.');
+        return;
+      }
+    }
+    
+    const branchMap = analysis.branchMap;
+    
+    // Step 2: Collect chat history
+    updateProgressOverlay("Collecting chat history...", 20);
+    
+    // Re-scrape and process current chat history for content
+    const scrapedHistory = await climbAndScrapeHistory();
+    if (scrapedHistory.length === 0) {
+      hideProgressOverlay();
+      alert('Could not collect chat history. Please try again.');
       return;
     }
-  }
-  
-  const branchMap = analysis.branchMap;
-  
-  // Re-scrape and process current chat history for content
-  const scrapedHistory = await climbAndScrapeHistory();
-  if (scrapedHistory.length === 0) {
-    return;
-  }
-  
-  const { processedHistory } = processScrapedHistory(scrapedHistory, {
-    includeInPrompt: false, // We don't need prompt format for branch copying
-    sendProgress: false,
-    checkCancellation: false
-  });
-  
-  // Use the freshly processed history
-  const chatHistory = processedHistory;
-  
-  const threadMessages = chatHistory.filter(message => {
-    // Check if this message's turnId exists in the branch map
-    const messageThreadData = branchMap[message.turnId];
     
-    if (!messageThreadData || typeof messageThreadData !== 'object') {
-      return false;
+    // Step 3: Process messages
+    updateProgressOverlay("Processing messages...", 75);
+    
+    const { processedHistory } = processScrapedHistory(scrapedHistory, {
+      includeInPrompt: false, // We don't need prompt format for branch copying
+      sendProgress: false,
+      checkCancellation: false
+    });
+    
+    // Use the freshly processed history
+    const chatHistory = processedHistory;
+    
+    const threadMessages = chatHistory.filter(message => {
+      // Check if this message's turnId exists in the branch map
+      const messageThreadData = branchMap[message.turnId];
+      
+      if (!messageThreadData || typeof messageThreadData !== 'object') {
+        return false;
+      }
+      
+      // Extract thread name from the stored object { thread: "...", turnId: "..." }
+      const messageThread = messageThreadData.thread;
+      
+      return messageThread === branchName;
+    });
+    
+    // FAIL FAST: Validate we found messages for this branch
+    if (threadMessages.length === 0) {
+      hideProgressOverlay();
+      alert(`No messages found for branch "${branchName}". Please check the branch name and try again.`);
+      return;
     }
     
-    // Extract thread name from the stored object { thread: "...", turnId: "..." }
-    const messageThread = messageThreadData.thread;
+    // Find the first message of the selected thread to determine the branch point
+    const firstThreadMessage = threadMessages[0];
+    const branchPointTurnId = firstThreadMessage.turnId;
     
-    return messageThread === branchName;
-  });
-  
-  
-  // FAIL FAST: Validate we found messages for this branch
-  if (threadMessages.length === 0) {
+    // Get all messages from the selected thread (we don't need main branch context for copying)
+    const contextMessages = [...threadMessages];
     
-    return;
-  }
-  
-  // Find the first message of the selected thread to determine the branch point
-  const firstThreadMessage = threadMessages[0];
-  const branchPointTurnId = firstThreadMessage.turnId;
-  
-  // Get all messages from the selected thread (we don't need main branch context for copying)
-  const contextMessages = [...threadMessages];
-  
-  // Sort messages chronologically by their position in the original chat
-  // (We'll use the order they appear in chatHistory as the chronological order)
-  const turnIdOrder = chatHistory.map(m => m.turnId);
-  contextMessages.sort((a, b) => {
-    const indexA = turnIdOrder.indexOf(a.turnId);
-    const indexB = turnIdOrder.indexOf(b.turnId);
-    return indexA - indexB;
-  });
-  
-  
-  // FAIL FAST: This should never happen if we have thread messages
-  if (contextMessages.length === 0) {
+    // Sort messages chronologically by their position in the original chat
+    // (We'll use the order they appear in chatHistory as the chronological order)
+    const turnIdOrder = chatHistory.map(m => m.turnId);
+    contextMessages.sort((a, b) => {
+      const indexA = turnIdOrder.indexOf(a.turnId);
+      const indexB = turnIdOrder.indexOf(b.turnId);
+      return indexA - indexB;
+    });
     
-    return;
-  }
+    // FAIL FAST: This should never happen if we have thread messages
+    if (contextMessages.length === 0) {
+      hideProgressOverlay();
+      alert('No context messages found. Please try again.');
+      return;
+    }
+    
+    // Step 4: Format branch content
+    updateProgressOverlay("Formatting branch content...", 85);
 
   // Create thread hierarchy information
   const threadInfo = {
@@ -1696,18 +1741,28 @@ async function openFilteredBranch(branchName) {
     attachmentNotice = `\n\n⚠️ **IMPORTANT - ATTACHMENTS REQUIRED:**\nThis conversation references ${uniqueAttachments.length} file(s) that were attached in the original chat. To continue this conversation properly, please upload the following files from your Google AI Studio folder:\n\n${attachmentList}\n\n**Finding your files:** Look in your Google AI Studio file manager for files with these exact names and upload times. If you have multiple files with the same name, use the upload timestamp to identify the correct ones. Original thread extracted on ${currentDate}.\n\n`;
   }
 
-  const finalContentForNewChat = `Please continue the conversation based on the following context, which is a complete thread from a previous chat including its main branch context. This contains ${threadInfo.totalMessages} messages total (${threadInfo.mainBranchMessages} from main branch context + ${threadInfo.threadSpecificMessages} from the selected "${branchName}" thread). The conversation branches at message ${threadInfo.branchPoint || 'N/A'}. Preserve the code formatting and structure:${attachmentNotice}\n\n${filteredContent}`;
-  
-  
-  
-  // Try to focus the document first
-  if (document.hasFocus && !document.hasFocus()) {
-    window.focus();
-    document.body.focus();
+    const finalContentForNewChat = `Please continue the conversation based on the following context, which is a complete thread from a previous chat including its main branch context. This contains ${threadInfo.totalMessages} messages total (${threadInfo.mainBranchMessages} from main branch context + ${threadInfo.threadSpecificMessages} from the selected "${branchName}" thread). The conversation branches at message ${threadInfo.branchPoint || 'N/A'}. Preserve the code formatting and structure:${attachmentNotice}\n\n${filteredContent}`;
+    
+    // Step 5: Copy to clipboard
+    updateProgressOverlay("Copying to clipboard...", 95);
+    
+    // Try to focus the document first
+    if (document.hasFocus && !document.hasFocus()) {
+      window.focus();
+      document.body.focus();
+    }
+    
+    // Use fallback method for content scripts
+    await copyToClipboardContentScript(finalContentForNewChat, branchName, threadInfo);
+    
+    // Hide progress overlay
+    hideProgressOverlay();
+    
+  } catch (error) {
+    console.error('Error during branch copy:', error);
+    hideProgressOverlay();
+    alert(`Failed to copy branch "${branchName}". Please try again.`);
   }
-  
-  // Use fallback method for content scripts
-  copyToClipboardContentScript(finalContentForNewChat, branchName, threadInfo);
   
 }
 
@@ -1814,69 +1869,130 @@ async function goToBranch(branchName) {
   const chatId = getCurrentChatId();
   if (!chatId) return;
   
-  const analysis = getLatestAnalysisFromDom();
-  if (!analysis || !analysis.branchMap) return;
+  // Try to get analysis data (DOM or cache)
+  let analysis = getLatestAnalysisFromDom();
+  if (!analysis || !analysis.branchMap) {
+    // Try cache fallback
+    return new Promise((resolve) => {
+      getAnalysisFromCache((cachedData) => {
+        if (cachedData && cachedData.branchMap) {
+          analysis = cachedData;
+          proceedWithGoToBranch();
+        } else {
+          resolve();
+        }
+      });
+    });
+  } else {
+    proceedWithGoToBranch();
+  }
   
-  // Step 1: Try to find turn-IDs from analysis that exist in current DOM
-  const branchTurnIds = Object.keys(analysis.branchMap)
-    .filter(turnId => analysis.branchMap[turnId].thread === branchName)
-    .reverse(); // Start with newest first
+  async function proceedWithGoToBranch() {
+    // Step 1: Find target turn IDs for the selected branch
+    const branchTurnIds = Object.keys(analysis.branchMap)
+      .filter(turnId => analysis.branchMap[turnId].thread === branchName)
+      .reverse(); // Start with newest first
+    
+    if (branchTurnIds.length === 0) return;
+    
+    // Step 2: Direct DOM Search - try to find turn element directly in current DOM
+    for (const turnId of branchTurnIds) {
+      const turnElement = document.getElementById(turnId);
+      if (turnElement) {
+        // Found directly! Jump immediately and highlight
+        turnElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center',
+          inline: 'nearest'
+        });
+        
+        turnElement.style.transition = 'background-color 0.3s ease';
+        turnElement.style.backgroundColor = '#fff3cd';
+        setTimeout(() => {
+          turnElement.style.backgroundColor = '';
+        }, 2000);
+        return; // Success, no need for careful navigation
+      }
+    }
+    
+    // Step 3: If not found in current DOM, show progress overlay and search carefully
+    showProgressOverlay();
+    updateProgressOverlay("Searching for branch messages...", 10);
+    
+    try {
+      // Careful navigation: step by step scroll from bottom to top
+      const found = await searchForBranchTurns(branchTurnIds, branchName);
+      
+      if (found) {
+        updateProgressOverlay("Branch found! Navigating...", 90);
+        // Target found, hide progress overlay and navigate
+        setTimeout(() => {
+          hideProgressOverlay();
+        }, 500);
+      } else {
+        updateProgressOverlay("Branch not found in current chat view", 100);
+        setTimeout(() => {
+          hideProgressOverlay();
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error during branch search:', error);
+      hideProgressOverlay();
+    }
+  }
+}
+
+// Helper function for careful branch search
+async function searchForBranchTurns(targetTurnIds, branchName) {
+  determinePageConfiguration();
+  if (!pageConfig.turnSelector) return false;
+
+  const allTurns = Array.from(document.querySelectorAll(pageConfig.turnSelector));
+  if (allTurns.length === 0) return false;
+
+  let currentTurn = allTurns[allTurns.length - 1]; // Start from bottom
+  let searchedCount = 0;
+  const totalTurns = allTurns.length;
+  let safetyBreak = 500;
   
-  // Try direct navigation first
-  for (const turnId of branchTurnIds) {
-    const turnElement = document.getElementById(turnId);
-    if (turnElement) {
-      // Found it! Navigate directly
-      turnElement.scrollIntoView({ 
+  while (currentTurn && safetyBreak-- > 0) {
+    searchedCount++;
+    
+    // Update progress
+    const progress = 10 + Math.round((searchedCount / totalTurns) * 70); // 10-80% range
+    updateProgressOverlay(`Searching through chat: ${searchedCount}/${totalTurns} messages processed`, progress);
+    
+    // Check if current turn matches any of our target turn IDs
+    const turnId = currentTurn.id;
+    if (targetTurnIds.includes(turnId)) {
+      // Found target! Navigate and highlight
+      currentTurn.scrollIntoView({ 
         behavior: 'smooth', 
         block: 'center',
         inline: 'nearest'
       });
       
-      turnElement.style.transition = 'background-color 0.3s ease';
-      turnElement.style.backgroundColor = '#fff3cd';
+      currentTurn.style.transition = 'background-color 0.3s ease';
+      currentTurn.style.backgroundColor = '#fff3cd';
       setTimeout(() => {
-        turnElement.style.backgroundColor = '';
+        currentTurn.style.backgroundColor = '';
       }, 2000);
-      return; // Success, no need to climb
+      
+      return true;
     }
-  }
-  
-  // Step 2: If not found in current view, climb to find it
-  // TODO: Implement targeted climbing that stops when target is found
-  // For now, fall back to full scrape approach
-  const scrapedHistory = await climbAndScrapeHistory();
-  if (scrapedHistory.length === 0) return;
-  
-  const { processedHistory } = processScrapedHistory(scrapedHistory, {
-    includeInPrompt: false,
-    sendProgress: false,
-    checkCancellation: false
-  });
-  
-  const threadMessages = processedHistory.filter(message => {
-    const messageThreadData = analysis.branchMap[message.turnId];
-    return messageThreadData && messageThreadData.thread === branchName;
-  });
-  
-  if (threadMessages.length === 0) return;
-  
-  const lastMessage = threadMessages[threadMessages.length - 1];
-  const turnElement = document.getElementById(lastMessage.turnId);
-  
-  if (turnElement) {
-    turnElement.scrollIntoView({ 
-      behavior: 'smooth', 
-      block: 'center',
-      inline: 'nearest'
-    });
     
-    turnElement.style.transition = 'background-color 0.3s ease';
-    turnElement.style.backgroundColor = '#fff3cd';
-    setTimeout(() => {
-      turnElement.style.backgroundColor = '';
-    }, 2000);
+    // Move to previous turn
+    const previousTurn = currentTurn.previousElementSibling;
+    if (!previousTurn || !previousTurn.matches(pageConfig.turnSelector)) {
+      break;
+    }
+    currentTurn = previousTurn;
+    
+    // Small delay to prevent blocking UI
+    await new Promise(resolve => setTimeout(resolve, 20));
   }
+  
+  return false; // Not found
 }
 
 function insertPrompt(text) {

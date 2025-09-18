@@ -21,6 +21,149 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentAnalysisData = null;
   let currentChatInfo = null;
 
+  // --- Button Management Functions ---
+  function disableAllButtons() {
+    // Main control buttons
+    if (scrollToBottomButton) {
+      scrollToBottomButton.disabled = true;
+      scrollToBottomButton.style.opacity = '0.5';
+      scrollToBottomButton.style.cursor = 'not-allowed';
+    }
+    if (analyzeButton) {
+      analyzeButton.disabled = true;
+      analyzeButton.style.opacity = '0.5';
+      analyzeButton.style.cursor = 'not-allowed';
+    }
+    
+    // Branch control buttons
+    if (branchSelector) {
+      branchSelector.disabled = true;
+      branchSelector.style.opacity = '0.5';
+    }
+    if (openBranchButton) {
+      openBranchButton.disabled = true;
+      openBranchButton.style.opacity = '0.5';
+      openBranchButton.style.cursor = 'not-allowed';
+    }
+    if (goToBranchButton) {
+      goToBranchButton.disabled = true;
+      goToBranchButton.style.opacity = '0.5';
+      goToBranchButton.style.cursor = 'not-allowed';
+    }
+    
+    // Mermaid section buttons
+    if (copyJsonButton) {
+      copyJsonButton.disabled = true;
+      copyJsonButton.style.opacity = '0.5';
+      copyJsonButton.style.cursor = 'not-allowed';
+    }
+    if (copyMermaidButton) {
+      copyMermaidButton.disabled = true;
+      copyMermaidButton.style.opacity = '0.5';
+      copyMermaidButton.style.cursor = 'not-allowed';
+    }
+    if (showGraphButton) {
+      showGraphButton.disabled = true;
+      showGraphButton.style.opacity = '0.5';
+      showGraphButton.style.cursor = 'not-allowed';
+    }
+    
+    console.log('All buttons disabled during operation');
+  }
+
+  function enableAllButtons() {
+    // Main control buttons
+    if (scrollToBottomButton) {
+      scrollToBottomButton.disabled = false;
+      scrollToBottomButton.style.opacity = '1';
+      scrollToBottomButton.style.cursor = 'pointer';
+    }
+    if (analyzeButton) {
+      analyzeButton.disabled = false;
+      analyzeButton.style.opacity = '1';
+      analyzeButton.style.cursor = 'pointer';
+    }
+    
+    // Branch control buttons
+    if (branchSelector) {
+      branchSelector.disabled = false;
+      branchSelector.style.opacity = '1';
+    }
+    if (openBranchButton) {
+      openBranchButton.disabled = false;
+      openBranchButton.style.opacity = '1';
+      openBranchButton.style.cursor = 'pointer';
+    }
+    if (goToBranchButton) {
+      goToBranchButton.disabled = false;
+      goToBranchButton.style.opacity = '1';
+      goToBranchButton.style.cursor = 'pointer';
+    }
+    
+    // Mermaid section buttons
+    if (copyJsonButton) {
+      copyJsonButton.disabled = false;
+      copyJsonButton.style.opacity = '1';
+      copyJsonButton.style.cursor = 'pointer';
+    }
+    if (copyMermaidButton) {
+      copyMermaidButton.disabled = false;
+      copyMermaidButton.style.opacity = '1';
+      copyMermaidButton.style.cursor = 'pointer';
+    }
+    if (showGraphButton) {
+      showGraphButton.disabled = false;
+      showGraphButton.style.opacity = '1';
+      showGraphButton.style.cursor = 'pointer';
+    }
+    
+    console.log('All buttons re-enabled after operation');
+  }
+
+  // --- Operation Detection Functions ---
+  function checkForActiveOperation(callback) {
+    sendMessageToContentScript({ action: 'checkProgressOverlay' }, (response) => {
+      const hasActiveOperation = response && response.hasActiveOverlay;
+      console.log('Active operation check:', hasActiveOperation);
+      callback(hasActiveOperation);
+    });
+  }
+
+  function showOperationInProgressMessage() {
+    // Remove any existing operation messages first
+    const existingMessages = document.querySelectorAll('.operation-message');
+    existingMessages.forEach(msg => msg.remove());
+    
+    // Create operation in progress message
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'operation-message';
+    messageDiv.style.cssText = `
+      background-color: #f39c12;
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      text-align: center;
+      font-size: 0.9em;
+      border: 2px solid #e67e22;
+    `;
+    
+    messageDiv.innerHTML = `
+      <div style="margin-bottom: 10px; font-weight: bold;">
+        ⏳ Operation in Progress
+      </div>
+      <div style="font-size: 0.85em; line-height: 1.4;">
+        An operation is currently running. Please wait for it to complete before using the extension.
+      </div>
+    `;
+    
+    // Insert at the top of mainView
+    const mainView = document.getElementById('mainView');
+    if (mainView && mainView.firstChild) {
+      mainView.insertBefore(messageDiv, mainView.firstChild);
+    }
+  }
+
   // --- Helper Functions ---
   function sendMessageToContentScript(message, callback) {
     if (!activeTabId) {
@@ -270,6 +413,8 @@ document.addEventListener('DOMContentLoaded', () => {
         action: 'openBranchInNewChat', 
         branchName: selectedBranch 
       });
+      // Close popup so user can see the progress overlay during copy operation
+      window.close();
     }
   });
 
@@ -280,19 +425,33 @@ document.addEventListener('DOMContentLoaded', () => {
         action: 'goToBranch', 
         branchName: selectedBranch 
       });
+      // Close popup so user can see the progress overlay (if search is needed)
+      window.close();
     }
   });
 
   // Copy buttons
   copyJsonButton?.addEventListener('click', () => {
     if (currentAnalysisData?.jsonData) {
+      // Briefly disable buttons during copy operation
+      disableAllButtons();
       copyToClipboard(currentAnalysisData.jsonData, 'JSON');
+      // Re-enable buttons after a short delay
+      setTimeout(() => {
+        enableAllButtons();
+      }, 200);
     }
   });
 
   copyMermaidButton?.addEventListener('click', () => {
     if (currentAnalysisData?.mermaidData) {
+      // Briefly disable buttons during copy operation
+      disableAllButtons();
       copyToClipboard(currentAnalysisData.mermaidData, 'Mermaid');
+      // Re-enable buttons after a short delay
+      setTimeout(() => {
+        enableAllButtons();
+      }, 200);
     }
   });
 
@@ -364,6 +523,9 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('SG: Mermaid data available:', !!currentAnalysisData.mermaidData);
       console.log('SG: Mermaid preview:', currentAnalysisData.mermaidData.substring(0, 100) + '...');
       
+      // Disable buttons during graph processing
+      disableAllButtons();
+      
       try {
         const mermaidUrl = await createMermaidLiveUrl(currentAnalysisData.mermaidData);
         console.log('SG: Opening mermaid.live with URL:', mermaidUrl.substring(0, 100) + '...');
@@ -373,6 +535,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fallback: copy to clipboard and open mermaid.live
         copyToClipboard(currentAnalysisData.mermaidData, 'Mermaid (error fallback)');
         chrome.tabs.create({ url: 'https://mermaid.live/edit' });
+      } finally {
+        // Re-enable buttons after operation completes
+        setTimeout(() => {
+          enableAllButtons();
+        }, 500);
       }
     } else {
       console.log('SG: No Mermaid data available');
@@ -407,8 +574,22 @@ document.addEventListener('DOMContentLoaded', () => {
         mainView.classList.remove('hidden');
         incorrectDomainView.classList.add('hidden');
         
-        // Load analysis data from DOM and apply proper UI state based on use cases
-        loadAnalysisData();
+        // UF-06: Check for active operations before initializing popup
+        checkForActiveOperation((hasActiveOperation) => {
+          if (hasActiveOperation) {
+            // UC-11: Active operation detected - disable all buttons and show status message
+            console.log('Active operation detected - disabling popup functionality');
+            disableAllButtons();
+            showOperationInProgressMessage();
+            // Still load analysis data for UI structure, but keep buttons disabled
+            loadAnalysisData();
+          } else {
+            // UC-11/UC-12: No active operation - normal initialization
+            console.log('No active operation - normal popup initialization');
+            loadAnalysisData();
+            enableAllButtons();
+          }
+        });
       } else {
         console.log('Not a valid chat page or new chat');
         // UC-01, UC-02: Wrong domain or new chat - show error

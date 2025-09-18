@@ -1,6 +1,6 @@
 # Google AI Studio Chat Branches Extension - User Guide
 
-## **🚫 When the Extension Won't Work**
+## **When the Extension Won't Work**
 
 ### **Wrong Website**
 If you're on any website other than Google AI Studio, you'll see:
@@ -11,7 +11,7 @@ If you're on the "new chat" page (before starting a conversation), you'll see th
 
 ---
 
-## **✅ When You Haven't Run Analysis Yet**
+## **When You Haven't Run Analysis Yet**
 
 ### **First Time Using the Extension**
 When you open the extension on a chat that hasn't been analyzed yet, you'll see:
@@ -27,22 +27,22 @@ When you open the extension on a chat that hasn't been analyzed yet, you'll see:
 
 ---
 
-## **🎉 After You've Run Analysis**
+## **After You've Run Analysis**
 
 ### **All Features Available**
 Once the AI has analyzed your chat, you'll see the full extension with all these tools:
 
-**📊 Conversation Branches:**
+**Conversation Branches:**
 - **Branch dropdown** - Shows all the different branches in your conversation
-- **"Go to branch"** - Jumps to messages from that branch
-- **"Copy branch"** - Copies the main conversation up to the fork point, then all messages from the selected branch in chronological order
+- **"Go to branch"** - Jumps to messages from that branch (with progress overlay if search is needed)
+- **"Copy branch"** - Copies the main conversation up to the fork point, then all messages from the selected branch in chronological order (with progress overlay showing copy steps)
 
-**🎨 Visualization Tools:**
+**Visualization Tools:**
 - **"Copy JSON"** - Gets the raw data structure
 - **"Copy Mermaid"** - Gets code for creating diagrams
 - **"Show Graph"** - Opens an interactive visual map of your conversation flow
 
-**🔄 Analysis Tools:**
+**Analysis Tools:**
 - **"New Analysis"** - Run a fresh analysis (updates everything)
 - **"Scroll to Bottom"** - Quick way to get to your latest messages
 
@@ -54,13 +54,22 @@ Sometimes you might scroll away from where the AI put its analysis. If this happ
 
 ---
 
-## **🔧 Common Situations**
+## **Common Situations**
 
 ### **Multiple Analyses in One Chat**
 If you've run the analysis multiple times in the same chat:
 - The extension automatically uses the **newest analysis**
 - Older analyses are ignored
 - All features work normally with the latest data
+
+### **Mixed JSON and Mermaid Content**
+Sometimes the AI puts both JSON data and Mermaid diagram in one code block:
+- **Extension checks:** Separate blocks or combined? 
+- **If combined:** Splits them automatically and proceeds normally
+- **Result:** All features work exactly the same
+- **No user action needed**
+
+**That's it!** Simple split-and-proceed logic handles this edge case transparently.
 
 ### **If Something Goes Wrong**
 Sometimes the analysis might get corrupted or deleted:
@@ -70,12 +79,14 @@ Sometimes the analysis might get corrupted or deleted:
 
 ---
 
-## **📋 How to Use the Main Features**
+## **How to Use the Main Features**
 
 ### **Copying a Branch**
 1. **Select a branch** from the dropdown (e.g., "Bug Fixes", "Feature Ideas")
-2. **Click "Copy branch"** - This copies the main conversation up to where that branch started, then includes all messages from the selected branch in chronological order
-3. **Open a new chat** and paste - Now you have the full context plus the focused discussion!
+2. **Click "Copy branch"** - Shows progress overlay while copying the main conversation up to where that branch started, then includes all messages from the selected branch in chronological order
+3. **Wait for completion** - Progress overlay shows steps: preparing, collecting, scrolling, processing, formatting, and copying
+4. **Success notification** - Alert confirms the branch has been copied to clipboard
+5. **Open a new chat** and paste - Now you have the full context plus the focused discussion!
 
 **Why this is useful:**
 - Get complete context for a specific discussion thread
@@ -84,8 +95,9 @@ Sometimes the analysis might get corrupted or deleted:
 
 ### **Navigating Your Chat**
 1. **Select a branch** from the dropdown
-2. **Click "Go to branch"** - Jumps to where that branch starts
-3. The messages get highlighted so you can see the context
+2. **Click "Go to branch"** - First tries to jump directly to the branch messages if visible in current view
+3. **If not immediately visible** - Shows progress overlay "Searching for branch messages..." while carefully navigating through chat history
+4. **When found** - Jumps to where that branch starts and highlights the messages with yellow background for 2 seconds
 
 **Perfect for:**
 - Finding where you discussed something specific
@@ -104,7 +116,7 @@ Sometimes the analysis might get corrupted or deleted:
 
 ---
 
-## **🚨 What If Something Goes Wrong?**
+## **What If Something Goes Wrong?**
 
 ### **"Could not find the analysis"**
 **What happened:** The analysis message was deleted from your chat
@@ -124,7 +136,7 @@ Just paste it into a new chat to continue that specific discussion!
 
 ---
 
-## **💾 Why the Extension Remembers Your Data**
+## **Why the Extension Remembers Your Data**
 
 ### **Smart Memory System**
 The extension automatically saves your analysis results so they work even if:
@@ -149,12 +161,12 @@ The extension automatically saves your analysis results so they work even if:
 
 | Condition | Main View | Find Analysis | Branch Tools | Mermaid Tools |
 |-----------|-----------|---------------|--------------|---------------|
-| Wrong domain | ❌ (shows error) | ❌ | ❌ | ❌ |
-| New chat | ❌ (shows error) | ❌ | ❌ | ❌ |
-| Valid chat, no analysis | ✅ Basic | ❌ | ❌ | ❌ |
-| Analysis visible | ✅ Full | ❌ | ✅ | ✅ |
-| Analysis hidden | ✅ Full | ✅ | ✅ | ✅ |
-| Analysis corrupted | ✅ Basic | ✅ | ❌ | ❌ |
+| Wrong domain | No (shows error) | No | No | No |
+| New chat | No (shows error) | No | No | No |
+| Valid chat, no analysis | Yes Basic | No | No | No |
+| Analysis visible | Yes Full | No | Yes | Yes |
+| Analysis hidden | Yes Full | Yes | Yes | Yes |
+| Analysis corrupted | Yes Basic | Yes | No | No |
 
 This covers all the major use cases and edge cases for the extension!
 
@@ -293,19 +305,135 @@ This covers all the major use cases and edge cases for the extension!
 
 ---
 
+### **UC-08: Analysis Operation in Progress**
+**Conditions:**
+- Valid chat ID exists
+- User clicks "New Analysis" button
+- `climbAndScrapeHistory()` operation is running
+- Progress overlay is visible in main page
+- **Popup is closed** (user sees progress overlay on main page)
+
+**Main Page Behavior:**
+- Progress overlay visible with analysis progress updates
+- User can see "Scrolling through chat: X/Y messages" updates
+- User cannot interact with extension until operation completes
+
+**If User Reopens Popup During Operation:**
+- Popup shows normal UI based on current analysis data
+- All buttons appear enabled (popup doesn't know about active operation)
+- **Challenge:** User can potentially trigger conflicting operations
+
+---
+
+### **UC-09: Go to Branch Operation in Progress**
+**Conditions:**
+- Valid chat ID exists with analysis data
+- User selects branch and clicks "Go to branch"
+- Navigation/search operation is running (if branch not immediately visible)
+- **Popup is closed** (user sees progress overlay on main page if search needed)
+
+**Main Page Behavior:**
+- **Direct navigation:** If branch visible, immediate jump and highlight (no popup close)
+- **Search needed:** Progress overlay showing "Searching for branch messages..."
+- User can see "Searching through chat: X/Y messages processed" updates
+- Operation completes with branch highlighting
+
+**If User Reopens Popup During Search Operation:**
+- Popup shows normal UI with same branch still selected
+- All buttons appear enabled (popup doesn't track active search)
+- **Challenge:** User can potentially trigger conflicting navigation
+
+---
+
+### **UC-10: Copy Branch Operation in Progress**
+**Conditions:**
+- Valid chat ID exists with analysis data
+- User selects branch and clicks "Copy branch to clipboard"
+- Copy operation is running with progress overlay
+- **Popup is closed** (user sees progress overlay on main page)
+
+**Main Page Behavior:**
+- Progress overlay visible with detailed copy progress updates
+- User can see various copy steps: "Preparing branch copy...", "Collecting chat history...", "Processing messages...", etc.
+- Operation completes with success alert
+- User cannot interact with extension until operation completes
+
+**If User Reopens Popup During Copy Operation:**
+- Popup shows normal UI with same branch still selected
+- All buttons appear enabled (popup doesn't track active copy operation)
+- **Challenge:** User can potentially trigger conflicting copy operations or other actions
+
+---
+
+### **UC-11: Popup Reopened During Active Operation**
+**Conditions:**
+- Any long-running operation is in progress (analysis, branch search, branch copy)
+- Progress overlay is visible on main page
+- User clicks extension icon to reopen popup
+- Content script operation is still running
+
+**Popup Initialization Behavior:**
+1. **Progress Overlay Detection**: Popup sends `checkProgressOverlay` message to content script
+2. **Content script responds** with current overlay state (`hasActiveOverlay: true/false`)
+3. **If active operation detected:**
+   - All buttons disabled (grayed out with opacity 0.5)
+   - "Operation in Progress" message displayed
+   - User sees: *"An operation is currently running. Please wait for it to complete."*
+4. **If no active operation:**
+   - Normal popup initialization with all buttons enabled
+
+**UI Elements Shown (Active Operation):**
+- `mainView` (visible) - Shows normal interface structure
+- `filteringView` (visible if analysis data exists) - All controls disabled
+- `mermaidSection` (visible if analysis data exists) - All buttons disabled
+- **Operation status message** - Prominent notification about active operation
+- All buttons grayed out and non-clickable
+
+**UI Elements Shown (No Active Operation):**
+- Normal popup behavior (UC-04, UC-05, etc.)
+- All buttons enabled and functional
+
+---
+
+### **UC-12: Operation Interrupted (Crash/Refresh Recovery)**
+**Conditions:**
+- User was in middle of any operation (UC-08, UC-09, or UC-10)
+- Page refreshed, script crashed, or browser closed/reopened
+- Progress overlay was showing but operation never completed
+- No completion callback was executed to re-enable buttons
+
+**UI Elements Behavior on Next Popup Open:**
+- Extension detects no active operation in progress
+- **All buttons default to enabled state** (ignoring any previous disabled state)
+- `mainView` - Shows appropriate state based on analysis data availability
+- `filteringView` - Shows if analysis data exists (enabled)
+- `mermaidSection` - Shows if analysis data exists (enabled)
+- No progress overlay visible
+- Normal functionality fully restored
+
+**Recovery Logic:**
+- Extension does NOT persist button disabled states across page reloads
+- Each popup opening starts with fresh UI state evaluation
+- Previous operation state is considered abandoned/completed
+- User can immediately retry any operation if needed
+
+---
+
 ## **User Action Flows**
 
 ### **UF-01: New Analysis Flow**
 **Trigger:** User clicks `analyzeButton`
 **Steps:**
-1. `showProgressOverlay()` displays center overlay
-2. `climbAndScrapeHistory()` scrolls through chat
-3. Progress updates: "Scrolling through chat: X/Y messages"
-4. `insertPrompt()` pastes analysis prompt
-5. `hideProgressOverlay()` after 3 seconds
-6. User manually clicks Send in AI Studio
-7. AI responds with analysis
-8. Next popup open → UC-04 or UC-05
+1. **Popup closes immediately** - User sees main AI Studio page
+2. `showProgressOverlay()` displays center overlay on main page
+3. `climbAndScrapeHistory()` scrolls through chat
+4. Progress updates: "Scrolling through chat: X/Y messages"
+5. `insertPrompt()` pastes analysis prompt
+6. `hideProgressOverlay()` after 3 seconds
+7. User manually clicks Send in AI Studio
+8. AI responds with analysis
+9. **If user reopens popup during operation:** UC-11 (potential conflicts)
+10. **After operation completes:** Next popup open → UC-04 or UC-05
 
 ---
 
@@ -316,9 +444,18 @@ This covers all the major use cases and edge cases for the extension!
 2. Try `getLatestAnalysisFromDom()` first
 3. If not found, use cached `branchMap`
 4. Find target turn IDs for selected branch
-5. `scrollIntoView()` to target turn
-6. Highlight with yellow background for 2 seconds
-7. Popup remains open
+5. **Direct DOM Search:** Try to find turn element directly in current DOM using `document.getElementById(turnId)`
+6. **If found directly:** 
+   - Jump to turn immediately, highlight with yellow background for 2 seconds
+   - **Popup remains open** (no long operation needed)
+7. **If not found in current DOM:** 
+   - **Popup closes immediately** - User sees main AI Studio page
+   - Show progress overlay: "Searching for branch messages..."
+8. **Careful Navigation:** Step by step scroll from bottom to top through chat history
+9. **Progress Updates:** "Searching through chat: X/Y messages processed"
+10. **When target found:** Hide progress overlay, `scrollIntoView()` to target turn
+11. Highlight with yellow background for 2 seconds
+12. **If user reopens popup during search:** UC-11 (potential conflicts)
 
 ---
 
@@ -326,12 +463,22 @@ This covers all the major use cases and edge cases for the extension!
 **Trigger:** User selects branch + clicks `openBranchButton`
 **Steps:**
 1. `openFilteredBranch(branchName)` called
-2. Get analysis data (DOM or cache)
-3. `climbAndScrapeHistory()` to collect all messages
-4. Filter messages by branch using `branchMap`
-5. Format as markdown with context
-6. `copyToClipboardContentScript()` to clipboard
-7. Success alert: *"The full history for [BRANCH_NAME] thread has been copied"*
+2. **Popup closes immediately** - User sees main AI Studio page
+3. **Show progress overlay:** "Copying branch history..."
+4. **Progress Updates:** "Preparing branch copy..." (10%)
+5. Get analysis data (DOM or cache)
+6. **Progress Updates:** "Collecting chat history..." (20%)
+7. `climbAndScrapeHistory()` to collect all messages
+8. **Progress Updates:** "Scrolling through chat: X/Y messages" (20-70%)
+9. **Progress Updates:** "Processing messages..." (75%)
+10. Filter messages by branch using `branchMap`
+11. **Progress Updates:** "Formatting branch content..." (85%)
+12. Format as markdown with context
+13. **Progress Updates:** "Copying to clipboard..." (95%)
+14. `copyToClipboardContentScript()` to clipboard
+15. **Hide progress overlay**
+16. Success alert: *"The full history for [BRANCH_NAME] thread has been copied to your clipboard. Please paste it into a new chat."*
+17. **If user reopens popup during operation:** UC-11 (potential conflicts)
 
 ---
 
@@ -351,6 +498,29 @@ This covers all the major use cases and edge cases for the extension!
 1. Check `currentAnalysisData?.jsonData` or `mermaidData`
 2. `copyToClipboard()` directly from cache
 3. No additional processing needed
+
+---
+
+### **UF-06: Popup Reopened During Operation Flow**
+**Trigger:** User reopens popup while content script operation is running
+**Steps:**
+1. **Popup initialization begins** - Normal DOM element references loaded
+2. **Progress overlay check** - Send `{ action: 'checkProgressOverlay' }` to content script
+3. **Content script response** - Returns `{ hasActiveOverlay: true/false }`
+4. **If active operation detected (`hasActiveOverlay: true`):**
+   - Call `disableAllButtons()` - All buttons grayed out with opacity 0.5
+   - Show operation status message: *"An operation is currently running. Please wait for it to complete."*
+   - Hide normal analysis data loading
+5. **If no active operation (`hasActiveOverlay: false`):**
+   - Continue with normal popup initialization (loadAnalysisData, etc.)
+   - Call `enableAllButtons()` - Normal functionality available
+6. **User sees appropriate UI state** - Either disabled with message or fully functional
+
+**Key Benefits:**
+- Prevents conflicting operations
+- Clear user feedback about system state
+- Leverages existing progress overlay infrastructure
+- Simple implementation with minimal code changes
 
 ---
 
@@ -379,9 +549,11 @@ This covers all the major use cases and edge cases for the extension!
 
 ### **EF-04: Combined Block Handling**
 **Trigger:** AI returns JSON+Mermaid in single code block
-**Detection:** `code.includes('```mermaid')` in JSON panel
-**Processing:** Regex extraction of Mermaid content
-**Log:** `"Extracted Mermaid from combined JSON+Mermaid block"`
+**Processing:** 
+1. Check if JSON block contains ````mermaid` 
+2. If yes: Split using regex, extract both parts
+3. If no: Process normally
+4. Continue with standard logic
 **User Impact:** Transparent - all features work normally
 
 ---
@@ -399,6 +571,40 @@ This covers all the major use cases and edge cases for the extension!
 **Trigger:** Successful branch copy operation
 **Response:** Alert: *"The full history for [BRANCH_NAME] thread has been copied to your clipboard. Please paste it into a new chat."*
 **Type:** Informational (success notification)
+
+---
+
+### **EF-07: Operation Interruption Recovery**
+**Trigger:** User opens popup after page refresh/crash during any operation (analysis, go to branch, copy branch)
+**Detection:** No active progress overlay, no operation completion flags set
+**Processing:** Extension initializes with fresh state, ignoring any previous operation state
+**Response:** Normal UI with all buttons enabled based on current analysis data availability
+**Log:** `"Popup initialized - no active operations detected"`
+**User Impact:** Can immediately use all available features, previous operation considered abandoned
+
+---
+
+### **EF-08: Popup Reopened During Active Operation**
+**Trigger:** User reopens popup while content script operation is running (analysis, branch search, branch copy)
+**Detection:** Popup sends `checkProgressOverlay` message to content script on initialization
+**Processing:** 
+1. Content script checks for existing progress overlay in DOM
+2. Responds with `{ hasActiveOverlay: true/false }`
+3. Popup disables all buttons if active operation detected
+**Response:** 
+- **Active operation found**: All buttons disabled, "Operation in Progress" message shown
+- **No active operation**: Normal popup initialization
+**User Impact:** **RISK MITIGATED** - Users cannot trigger conflicting operations, clear feedback provided
+**Implementation:** Simple DOM check leveraging existing progress overlay infrastructure
+
+---
+
+### **EF-09: Multiple Rapid Operations**
+**Trigger:** User clicks multiple buttons rapidly or triggers operations while others are running
+**Detection:** Multiple content script operations attempting to run simultaneously
+**Processing:** Depends on operation type - some may conflict, others may queue
+**Response:** Unpredictable behavior - operations may fail, interfere, or complete unexpectedly
+**User Impact:** Potential errors, incomplete operations, or system instability
 
 ---
 
@@ -432,12 +638,21 @@ This covers all the major use cases and edge cases for the extension!
 
 ## **UI State Summary Table**
 
-| **Use Case** | **mainView** | **filteringView** | **mermaidSection** | **Find Analysis** |
-|---|---|---|---|---|
-| UC-01: Wrong Domain | ❌ | ❌ | ❌ | ❌ |
-| UC-02: New Chat | ❌ | ❌ | ❌ | ❌ |
-| UC-03: No Analysis | ✅ Basic | ❌ | ❌ | ❌ |
-| UC-04: Analysis Visible | ✅ Full | ✅ | ✅ | ❌ |
-| UC-05: Analysis Hidden | ✅ Full | ✅ | ✅ | ⚠️ Optional |
-| UC-06: Analysis Corrupted | ✅ (Cache-dependent) | ✅ (Cache-dependent) | ✅ (Cache-dependent) | ⚠️ Warning |
-| UC-07: Multiple Analyses | ✅ Full | ✅ | ✅ | ❌ |
+| **Use Case** | **mainView** | **filteringView** | **mermaidSection** | **Find Analysis** | **Buttons State** |
+|---|---|---|---|---|---|
+| UC-01: Wrong Domain | No | No | No | No | N/A |
+| UC-02: New Chat | No | No | No | No | N/A |
+| UC-03: No Analysis | Yes Basic | No | No | No | Enabled |
+| UC-04: Analysis Visible | Yes Full | Yes | Yes | No | Enabled |
+| UC-05: Analysis Hidden | Yes Full | Yes | Yes | Optional | Enabled |
+| UC-06: Analysis Corrupted | Yes (Cache-dependent) | Yes (Cache-dependent) | Yes (Cache-dependent) | Warning | Enabled |
+| UC-07: Multiple Analyses | Yes Full | Yes | Yes | No | Enabled |
+| UC-08: Analysis in Progress | **Popup Closed** | **Popup Closed** | **Popup Closed** | **Popup Closed** | **N/A (Popup Closed)** |
+| UC-09: Go to Branch in Progress | **Popup Closed*** | **Popup Closed*** | **Popup Closed*** | **Popup Closed*** | **N/A (Popup Closed)** |
+| UC-10: Copy Branch in Progress | **Popup Closed** | **Popup Closed** | **Popup Closed** | **Popup Closed** | **N/A (Popup Closed)** |
+| UC-11: Popup During Operation | Yes Full | Yes (Disabled) | Yes (Disabled) | Status Message | **All Disabled (Safe)** |
+| UC-12: Operation Interrupted | Yes (Recovery) | Yes (Recovery) | Yes (Recovery) | No | **Enabled (Fresh)** |
+
+**Notes:**
+- UC-09*: Go to Branch popup only closes if search is needed. For direct navigation (branch immediately visible), popup remains open.
+- UC-11: "All Disabled (Safe)" indicates progress overlay detection prevents conflicts by disabling buttons when operations are running.
