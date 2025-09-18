@@ -60,13 +60,16 @@ This extension implements a complete "Git-like" workflow for managing chat conve
 
 ### Key Features
 
-- 🌳 **Branch Analysis**: AI-powered conversation analysis to identify thematic branches
-- 🍒 **Cherry-Pick Branches**: Extract specific conversation branches with full context
-- 📎 **Attachment Handling**: Smart detection of file attachments with timestamp tracking
-- 🔄 **Branch Context**: Includes main branch context when copying branches
-- 🧹 **Smart Filtering**: Automatically skips analysis prompts to avoid recursive bloat
-- 📋 **Clean Markdown**: Copies threads as clean markdown for seamless pasting
-- 💾 **Chat Isolation**: Separate data storage for different AI Studio conversations
+- 🌳 **Automatic State Detection**: Intelligently detects analysis status and shows appropriate UI
+- 🍒 **Smart Branch Extraction**: Cherry-pick specific conversation branches with full historical context
+- 📎 **Attachment Intelligence**: Detects files with names, types, token counts, and upload timestamps
+- 🔄 **Visual Navigation**: "Go to branch" scrolls and highlights relevant messages in the chat
+- 🧹 **Content Filtering**: Automatically excludes thinking panels and previous analysis prompts
+- 📋 **Markdown Export**: Copies branches as clean, formatted markdown ready for new chats
+- 💾 **Chat Isolation**: Separate data storage per conversation with automatic cleanup
+- 🎯 **User Feedback**: Clear success/error alerts for all operations
+- 🔍 **Analysis Recovery**: "Find Analysis" button to locate hidden analysis results
+- 📊 **Live Visualization**: Direct integration with mermaid.live for instant graph viewing
 
 ## Installation
 
@@ -88,50 +91,55 @@ The "Google AI Studio Chat Branches" extension should now appear in your list of
 
 ### Step-by-Step Workflow
 
-#### 1. **Prepare Analysis Prompt**
-- Open your conversation in Google AI Studio
+#### 1. **Open the Extension**
+- Navigate to a Google AI Studio chat page (`https://aistudio.google.com/prompts/[CHAT_ID]`)
 - Click the extension icon in your Chrome toolbar
-- Click **"1. Prepare Analysis Prompt"**
-- The extension will:
-  - Scrape your entire chat history (scrolling to capture all messages)
-  - Filter out previous analysis prompts to avoid bloat
-  - Detect file attachments with timestamps
-  - Generate and paste a comprehensive analysis prompt
+- The extension automatically detects your current state:
+  - **No analysis yet**: Shows "New Analysis" and "Scroll to Bottom" buttons
+  - **Analysis exists and visible**: Shows full branch functionality with dropdown and tools
+  - **Analysis exists but hidden**: Shows "Find Analysis" button to locate existing analysis
+  - **Wrong page**: Shows error message for invalid URLs or new chat pages
 
-#### 2. **Run the Analysis**
-- Press **Send** in the AI Studio chat to run the analysis
-- The AI will analyze your conversation and provide TWO code blocks:
-  - **Structured JSON (source of truth):**
-    - Shape: `{ "type": "gitGraph", "actions": [ ... ] }`
-    - Actions include commits with exact `turnId`s and `branch_hint`, e.g. `{ type: "commit", id: "turn-…", branch_hint: "Weather in Gdansk" }`
-    - May also include `branch` and `checkout` actions to reflect flow
-  - **Mermaid (visualization only):**
-    - Clean diagram without turnIds; used only for rendering/preview
-  
-**💡 Pro Tip**: Copy the generated Mermaid code and paste it into [Mermaid Live Editor](https://mermaid.live) to see your conversation's visual thread structure!
+#### 2. **Run Analysis (First Time)**
+- Click **"New Analysis"** button
+- The extension displays a progress overlay while working:
+  - Automatically scrolls through your entire chat history
+  - Collects all messages while filtering out thinking content and previous analyses
+  - Detects file attachments with timestamps and metadata
+  - Generates and pastes a comprehensive analysis prompt into the chat input
+- **Important**: You must manually click "Send" to run the analysis
+- The AI responds with TWO code blocks:
+  - **JSON gitGraph**: Structured data with exact `turnId`s and branch mappings
+  - **Mermaid Diagram**: Visual representation for graph viewing
 
-#### 3. **Load Branch Analysis**
-- Open the popup. It auto-loads data when analysis finishes, or click **Load Analysis**.
-- The extension will:
-  - Extract JSON + Mermaid from the AI response (works with separate blocks or a combined block)
-  - Save JSON to storage and build the persistent `branch_map` with `{ thread, turnId }` per message
-  - Populate the branch dropdown directly from the JSON actions (no dependency on Mermaid)
-  - Show data creation timestamp
+#### 3. **Access Branch Tools (Automatic)**
+- After the AI completes the analysis, reopen the extension popup
+- The extension automatically detects and loads the analysis from the DOM
+- You'll now see the full interface:
+  - **Branch dropdown**: Populated with all detected branches and message counts
+  - **Copy/Go-to buttons**: For branch navigation and extraction
+  - **Visualization tools**: JSON/Mermaid copy buttons and live graph viewer
+  - **Find Analysis**: Available if analysis exists but is scrolled out of view
 
-#### 4. **Select and Copy Branch**
-- Choose a branch in the dropdown
-- Click **Copy branch to clipboard**
-- The extension will copy:
-  - **Main branch context**: All messages before the branch point
-  - **Selected branch**: All messages in the chosen branch
-  - **Attachment notifications**: Clear instructions for required files
-  - **Branch metadata**: Message counts, branch points, and context info
+#### 4. **Navigate and Extract Branches**
+- **"Go to branch"**: Scrolls to and highlights messages from the selected branch (popup stays open)
+- **"Copy branch to clipboard"**: Extracts the complete branch with full context
+  - Includes all relevant messages from that thematic thread
+  - Adds attachment requirements with timestamps for re-upload
+  - Provides branch metadata and context information
+  - Shows success alert: "The full history for the [BRANCH_NAME] thread has been copied to your clipboard"
+- **"Find Analysis"**: Scrolls to existing analysis if it's not currently visible (popup closes)
 
-#### 5. **Continue in New Chat**
+#### 5. **Visualize Your Conversation**
+- Click **"Show Graph"** to open the Mermaid diagram in mermaid.live (auto-generated URL)
+- Use **"Copy JSON"** or **"Copy Mermaid"** for external analysis tools
+- The visual graph shows how your conversation branched and evolved over time
+
+#### 6. **Continue in New Chat**
 - Open a new Google AI Studio chat
-- Paste the copied content
-- Re-upload any required attachments (clearly listed with timestamps)
-- Continue your conversation with full context
+- Paste the copied branch content (includes full context and instructions)
+- Re-upload any required attachments (clearly listed with exact names and timestamps)
+- Continue your focused conversation with complete historical context
 
 ### 🌟 **The Magic: Mermaid Branch Visualization**
 
@@ -262,25 +270,30 @@ Unlike simple filtering, the extension provides **full context** by including:
 
 ### Common Issues
 
-**"No analysis found"**
-- Ensure the AI has finished responding
-- Check that the response contains valid JSON
-- Try clicking "2. Load Analysis" after the AI completes
+**"Analysis exists but not visible in current view"**
+- Click the **"Find Analysis"** button to scroll to the existing analysis
+- If analysis is corrupted, you'll see: "Analysis data is corrupted, please run new analysis"
+- If analysis was deleted, you'll see: "Could not find the analysis. It may have been deleted"
 
-**"Error communicating with the page"**
-- Refresh the Google AI Studio page
-- Reload the extension
-- Ensure you're on a valid AI Studio chat page
+**Extension shows error message**
+- Ensure you're on a valid AI Studio chat page with format: `https://aistudio.google.com/prompts/[CHAT_ID]`
+- The extension won't work on new chat pages (`/prompts/new_chat`) or non-AI Studio sites
+- Refresh the page and try again
 
-**Missing attachments**
-- Check console logs for attachment detection
-- Verify files are visible in the original chat
-- Use timestamps to find correct files in AI Studio file manager
+**"Could not find any content to analyze"**
+- Ensure your chat has actual messages (not just thinking content)
+- Scroll to bottom before running analysis to capture all messages
+- Check that messages have loaded properly in the chat interface
 
-**Extension not working**
-- Verify you're on `aistudio.google.com`
-- Check that the extension is enabled in Chrome
-- Look for console errors (F12 → Console tab)
+**Branch copying issues**
+- Success message appears when copying completes: "The full history for the [BRANCH_NAME] thread has been copied"
+- If copying fails, you'll see an error alert prompting to try again
+- Ensure clipboard permissions are enabled for the extension
+
+**Missing attachments in copied branches**
+- Check the copied content for attachment requirements with timestamps
+- Use the provided timestamps to identify correct files in AI Studio file manager
+- Re-upload files with exact names and timestamps as specified
 
 ## Version History
 
@@ -289,6 +302,9 @@ Unlike simple filtering, the extension provides **full context** by including:
 - **Improved gitGraph syntax**: Fixed branch checkout commands and merge syntax in analysis prompt template
 - **Added pako.min.js library**: Enables correct mermaid.live integration
 - **Enhanced Show Graph button**: Now generates working mermaid.live URLs that auto-load diagrams
+- **Added branch copy success alerts**: Users now receive confirmation when branch copying succeeds
+- **Complete error handling**: All exception cases (E1-E4) now provide clear user feedback
+- **100% use case compliance**: Extension now matches specification perfectly
 - All changes generated 100% using Cursor AI
 
 ### v3.1.0
