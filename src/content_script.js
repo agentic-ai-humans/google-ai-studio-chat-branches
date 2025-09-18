@@ -1741,11 +1741,27 @@ async function openFilteredBranch(branchName) {
   
   // Show progress overlay
   showProgressOverlay();
-  updateProgressOverlay("Copying branch history...", 5);
+  updateProgressOverlay("Preparing branch export...", 5);
   
-  try {
-    // Step 1: Prepare branch copy
-    updateProgressOverlay("Preparing branch copy...", 10);
+  // Step 1: Detect refresh and remap if needed
+  detectPageRefresh(chatId, (refreshDetected) => {
+    if (refreshDetected) {
+      updateProgressOverlay("Updating mappings after page refresh...", 8);
+      remapTurnIds(chatId, (remapSuccess) => {
+        if (remapSuccess) {
+          proceedWithBranchExport();
+        } else {
+          hideProgressOverlay();
+          alert('Failed to update mappings after page refresh. Please try running a new analysis.');
+        }
+      });
+    } else {
+      proceedWithBranchExport();
+    }
+  });
+  
+  function proceedWithBranchExport() {
+    updateProgressOverlay("Preparing branch export...", 10);
     
     // Try to get analysis from current view first
     let analysis = getLatestAnalysisFromDom();
@@ -1803,14 +1819,14 @@ async function openFilteredBranch(branchName) {
     const chatHistory = processedHistory;
     
     const threadMessages = chatHistory.filter(message => {
-      // Check if this message's turnId exists in the branch map
-      const messageThreadData = branchMap[message.turnId];
+      // Check if this message's sequence number exists in the branch map
+      const messageThreadData = branchMap[message.messageSequence];
       
       if (!messageThreadData || typeof messageThreadData !== 'object') {
         return false;
       }
       
-      // Extract thread name from the stored object { thread: "...", turnId: "..." }
+      // Extract thread name from the stored object { thread: "...", messageId: ... }
       const messageThread = messageThreadData.thread;
       
       return messageThread === branchName;
@@ -2049,34 +2065,77 @@ async function goToBranch(branchName) {
   const chatId = getCurrentChatId();
   if (!chatId) return;
   
-  // Try to get analysis data (DOM or cache)
-  let analysis = getLatestAnalysisFromDom();
-  if (!analysis || !analysis.branchMap) {
-    // Try cache fallback
-    return new Promise((resolve) => {
+  // Step 1: Detect if page was refreshed and remap if needed
+  detectPageRefresh(chatId, (refreshDetected) => {
+    if (refreshDetected) {
+      // Page was refreshed, remap turn-ids first
+      remapTurnIds(chatId, (remapSuccess) => {
+        if (remapSuccess) {
+          // Continue with updated mappings
+          proceedWithAnalysisData();
+        } else {
+          // Remapping failed, fall back to careful navigation
+          proceedWithCarefulNavigation();
+        }
+      });
+    } else {
+      // No refresh detected, proceed normally
+      proceedWithAnalysisData();
+    }
+  });
+  
+  function proceedWithAnalysisData() {
+    // Try to get analysis data (DOM or cache)
+    let analysis = getLatestAnalysisFromDom();
+    if (!analysis || !analysis.branchMap) {
+      // Try cache fallback
       getAnalysisFromCache((cachedData) => {
         if (cachedData && cachedData.branchMap) {
           analysis = cachedData;
-          proceedWithGoToBranch();
-        } else {
-          resolve();
+          proceedWithGoToBranch(analysis);
         }
       });
-    });
-  } else {
-    proceedWithGoToBranch();
+    } else {
+      proceedWithGoToBranch(analysis);
+    }
   }
   
-  async function proceedWithGoToBranch() {
-    // Step 1: Find target turn IDs for the selected branch
-    const branchTurnIds = Object.keys(analysis.branchMap)
-      .filter(turnId => analysis.branchMap[turnId].thread === branchName)
-      .reverse(); // Start with newest first
+  async function proceedWithGoToBranch(analysis) {
+    // Step 1: Find target integer IDs for the selected branch
+    const branchIntegerIds = Object.keys(analysis.branchMap)
+      .filter(intId => analysis.branchMap[intId].thread === branchName)
+      .map(id => parseInt(id))
+      .sort((a, b) => b - a); // Start with newest first
     
-    if (branchTurnIds.length === 0) return;
+    if (branchIntegerIds.length === 0) return;
     
-    // Step 2: Direct DOM Search - try to find turn element directly in current DOM
-    for (const turnId of branchTurnIds) {
+    // Step 2: Convert integer IDs to current turn-ids using mapping
+    const chatId = getCurrentChatId();
+    chrome.storage.local.get([`analysis_data_${chatId}`], (data) => {
+      const cachedData = data[`analysis_data_${chatId}`];
+      if (!cachedData || !cachedData.integerToTurnIdMap) {
+        proceedWithCarefulNavigation();
+        return;
+      }
+      
+      const integerToTurnIdMap = cachedData.integerToTurnIdMap;
+      const targetTurnIds = branchIntegerIds
+        .map(intId => integerToTurnIdMap[intId])
+        .filter(turnId => turnId); // Remove any missing mappings
+      
+      if (targetTurnIds.length === 0) {
+        proceedWithCarefulNavigation();
+        return;
+      }
+      
+      // Step 3: Try direct DOM navigation with current turn-ids
+      proceedWithDirectNavigation(targetTurnIds);
+    });
+  }
+  
+  function proceedWithDirectNavigation(targetTurnIds) {
+    // Direct DOM Search - try to find turn element directly in current DOM
+    for (const turnId of targetTurnIds) {
       const turnElement = document.getElementById(turnId);
       if (turnElement) {
         // Found directly! Jump immediately and highlight
@@ -2095,51 +2154,8 @@ async function goToBranch(branchName) {
       }
     }
     
-    // Step 2.5: NEW - Content-based fallback when turn IDs don't match (after page refresh)
-    // Get the original analysis prompt to extract message content and sequence info
-    const chatId = getCurrentChatId();
-    if (chatId) {
-      chrome.storage.local.get([`analysis_data_${chatId}`], (data) => {
-        const cachedData = data[`analysis_data_${chatId}`];
-        if (cachedData && cachedData.originalMessages) {
-          // Try to find messages by content matching
-          for (const originalMsg of cachedData.originalMessages) {
-            if (analysis.branchMap[originalMsg.turnId] && 
-                analysis.branchMap[originalMsg.turnId].thread === branchName) {
-              
-              // Find this message in current DOM by content
-              const foundElement = findMessageByContent(
-                originalMsg.textContent, 
-                originalMsg.role, 
-                originalMsg.messageSequence
-              );
-              
-              if (foundElement) {
-                // Found by content! Navigate and highlight
-                foundElement.scrollIntoView({ 
-                  behavior: 'smooth', 
-                  block: 'center',
-                  inline: 'nearest'
-                });
-                
-                foundElement.style.transition = 'background-color 0.3s ease';
-                foundElement.style.backgroundColor = '#fff3cd';
-                setTimeout(() => {
-                  foundElement.style.backgroundColor = '';
-                }, 2000);
-                return; // Success
-              }
-            }
-          }
-        }
-        
-        // If content matching also fails, proceed with careful navigation
-        proceedWithCarefulNavigation();
-      });
-    } else {
-      // No chat ID, proceed with careful navigation
-      proceedWithCarefulNavigation();
-    }
+    // If direct navigation fails, fall back to careful navigation
+    proceedWithCarefulNavigation();
   }
   
   function proceedWithCarefulNavigation() {
