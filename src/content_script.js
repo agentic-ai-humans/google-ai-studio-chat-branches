@@ -81,7 +81,7 @@ function showProgressOverlay() {
         "></div>
       </div>
       <div style="font-size: 12px; color: #95a5a6;">
-        The prompt will be pasted for you to review and send
+        The analysis prompt will be exported to a downloadable file
       </div>
     </div>
   `;
@@ -1301,12 +1301,14 @@ ${historyForPrompt}
 === END OF INSTRUCTIONS ===`;
   
   updateProgressOverlay("Preparing analysis prompt...", 80);
-  insertPrompt(dualPurposePrompt);
   
-  updateProgressOverlay("Analysis prompt ready! Please click Send to run it.", 100);
+  // Export prompt to file instead of inserting into input pane
+  await exportPromptToFile(dualPurposePrompt);
+  
+  updateProgressOverlay("✅ Analysis prompt exported! Please attach the downloaded file and send your message.", 100);
   setTimeout(() => {
     hideProgressOverlay();
-  }, 3000); // Keep overlay visible for 3 seconds to show completion
+  }, 5000); // Keep overlay visible for 5 seconds to show completion
   
   // No need to watch - we'll detect and store when user opens popup next time 
 }
@@ -2002,6 +2004,58 @@ async function searchForBranchTurns(targetTurnIds, branchName) {
   }
   
   return false; // Not found
+}
+
+// Export analysis prompt to a downloadable file
+async function exportPromptToFile(promptText) {
+  try {
+    const chatId = getCurrentChatId();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: 2024-09-18T14-30-45
+    const filename = `chat-analysis-prompt-${chatId || 'unknown'}-${timestamp}.txt`;
+    
+    // Create blob with the prompt content
+    const blob = new Blob([promptText], { type: 'text/plain' });
+    
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    
+    // Trigger download
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    console.log(`Analysis prompt exported to file: ${filename}`);
+    
+    // Also insert a short message in the input pane to guide the user
+    const shortMessage = `Please find the complete analysis prompt in the attached file: ${filename}
+
+Instructions:
+1. Attach the downloaded file to this message
+2. Send the message to run the analysis
+
+The file contains the full chat history and analysis instructions that were too long for the input pane.`;
+    
+    insertPrompt(shortMessage);
+    
+  } catch (error) {
+    console.error('Failed to export prompt to file:', error);
+    
+    // Fallback: try to insert a truncated version
+    const maxLength = 8000; // Conservative limit
+    if (promptText.length > maxLength) {
+      const truncatedPrompt = promptText.substring(0, maxLength) + '\n\n[TRUNCATED - Full prompt was too long for input pane]';
+      insertPrompt(truncatedPrompt);
+    } else {
+      insertPrompt(promptText);
+    }
+  }
 }
 
 function insertPrompt(text) {

@@ -1,6 +1,8 @@
 # Test files in examples/ (keep locally, don't commit)
 examples/mixed_json_mermaid_test.html
 examples/separate_json_mermaid_test.html
+examples/test-file-export.html
+examples/sample
 
 # OS generated files
 .DS_Store

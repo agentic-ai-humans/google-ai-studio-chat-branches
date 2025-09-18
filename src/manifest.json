@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Google AI Studio Chat Threads",
-  "version": "3.1.1",
-  "description": "Analyzes chat history to generate a thread graph and allows filtering by topic.",
+  "version": "3.2.0",
+  "description": "Analyzes chat history to generate a thread graph and allows filtering by topic. Exports analysis prompts to files to bypass input length limits.",
   "permissions": [
     "storage",
-    "tabs",
-    "clipboardWrite"
+    "tabs"
   ],
   "host_permissions": [
     "https://aistudio.google.com/prompts/*",

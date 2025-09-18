@@ -70,6 +70,7 @@ This extension implements a complete "Git-like" workflow for managing chat conve
 - 🎯 **User Feedback**: Clear success/error alerts for all operations
 - 🔍 **Analysis Recovery**: "Find Analysis" button to locate hidden analysis results
 - 📊 **Live Visualization**: Direct integration with mermaid.live for instant graph viewing
+- 📁 **File Export**: Exports analysis prompts to downloadable files, bypassing input length limitations
 
 ## Installation
 
@@ -106,8 +107,9 @@ The "Google AI Studio Chat Branches" extension should now appear in your list of
   - Automatically scrolls through your entire chat history
   - Collects all messages while filtering out thinking content and previous analyses
   - Detects file attachments with timestamps and metadata
-  - Generates and pastes a comprehensive analysis prompt into the chat input
-- **Important**: You must manually click "Send" to run the analysis
+  - **Exports the analysis prompt to a downloadable file** (bypasses input length limits!)
+  - Inserts helpful instructions into the chat input pane
+- **Important**: Attach the downloaded file to your message and click "Send" to run the analysis
 - The AI responds with TWO code blocks:
   - **JSON gitGraph**: Structured data with exact `turnId`s and branch mappings
   - **Mermaid Diagram**: Visual representation for graph viewing

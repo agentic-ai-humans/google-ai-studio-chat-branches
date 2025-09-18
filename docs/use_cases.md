@@ -17,13 +17,15 @@ If you're on the "new chat" page (before starting a conversation), you'll see th
 When you open the extension on a chat that hasn't been analyzed yet, you'll see:
 - **"Scroll to Bottom"** button - Click this first to make sure you're at the latest message
 - **"New Analysis"** button - Click this to analyze your chat history
-- A helpful tip explaining the process
+- A helpful tip explaining the file export process (no input length limits!)
 
 **What happens when you click "New Analysis":**
 1. The extension scrolls through your entire chat
 2. It creates a special prompt for the AI to analyze your conversation
-3. The prompt gets pasted into your chat (you need to press Send)
-4. The AI responds with a breakdown of your conversation topics
+3. **The prompt gets exported to a downloadable file** (bypasses input length limits!)
+4. Instructions are inserted into the chat input pane
+5. You attach the downloaded file to your message and press Send
+6. The AI responds with a breakdown of your conversation topics
 
 ---
 
@@ -34,12 +36,14 @@ Once the AI has analyzed your chat, you'll see the full extension with all these
 
 **Conversation Branches:**
 - **Branch dropdown** - Shows all the different branches in your conversation
+  - **Sorting**: Most recent activity first, then alphabetical
+  - **Format**: "Branch Name (X messages)" with message counts
 - **"Go to branch"** - Jumps to messages from that branch (with progress overlay if search is needed)
 - **"Copy branch"** - Copies the main conversation up to the fork point, then all messages from the selected branch in chronological order (with progress overlay showing copy steps)
 
 **Visualization Tools:**
-- **"Copy JSON"** - Gets the raw data structure
-- **"Copy Mermaid"** - Gets code for creating diagrams
+- **"Export JSON"** - Downloads the raw data structure as a file
+- **"Export Mermaid"** - Downloads the diagram code as a file
 - **"Show Graph"** - Opens an interactive visual map of your conversation flow
 
 **Analysis Tools:**
@@ -83,10 +87,11 @@ Sometimes the analysis might get corrupted or deleted:
 
 ### **Copying a Branch**
 1. **Select a branch** from the dropdown (e.g., "Bug Fixes", "Feature Ideas")
-2. **Click "Copy branch"** - Shows progress overlay while copying the main conversation up to where that branch started, then includes all messages from the selected branch in chronological order
-3. **Wait for completion** - Progress overlay shows steps: preparing, collecting, scrolling, processing, formatting, and copying
-4. **Success notification** - Alert confirms the branch has been copied to clipboard
-5. **Open a new chat** and paste - Now you have the full context plus the focused discussion!
+2. **Click "Copy branch"** - Shows progress overlay while preparing the branch export
+3. **Wait for completion** - Progress overlay shows steps: preparing, collecting, scrolling, processing, formatting, and exporting
+4. **File download** - A timestamped file is automatically downloaded with the branch content
+5. **Success notification** - Alert confirms the branch has been exported to a file
+6. **Open a new chat** and attach the file - Now you have the full context plus the focused discussion!
 
 **Why this is useful:**
 - Get complete context for a specific discussion thread
@@ -131,8 +136,8 @@ Sometimes the analysis might get corrupted or deleted:
 **What to do:** Have some actual conversation first, then try analysis
 
 ### **Success Messages**
-When you copy a branch, you'll see: *"The full history for [Topic Name] has been copied to your clipboard"*
-Just paste it into a new chat to continue that specific discussion!
+When you copy a branch, you'll see: *"The full history for [Topic Name] has been exported to file [filename]. Please attach the file to your new chat."*
+Just attach the downloaded file to a new chat to continue that specific discussion!
 
 ---
 
@@ -240,12 +245,15 @@ This covers all the major use cases and edge cases for the extension!
   - `scrollToBottomButton` - "Scroll to Bottom" (blue)
   - `analyzeButton` - "New Analysis" (blue)
 - `filteringView` (visible)
-  - `branchSelector` - populated dropdown
-  - `openBranchButton` - "Copy branch to clipboard" (blue)
+  - `branchSelector` - populated dropdown with sorted branches
+    - **Primary sort**: Most recent activity (highest turn index) descending
+    - **Secondary sort**: Alphabetical ascending for same recency
+    - **Format**: "Branch Name (X message[s])" with message counts
+  - `openBranchButton` - "Export branch to file" (blue)
   - `goToBranchButton` - "Go to branch" (teal #16a085)
 - `mermaidSection` (visible)
-  - `copyJsonButton` - "Copy JSON" (orange #f39c12)
-  - `copyMermaidButton` - "Copy Mermaid" (purple #9b59b6)
+  - `exportJsonButton` - "Export JSON" (orange #f39c12)
+  - `exportMermaidButton` - "Export Mermaid" (purple #9b59b6)
   - `showGraphButton` - "Show Graph" (green #2ecc71)
   - Links to mermaid.live
 
@@ -263,6 +271,8 @@ This covers all the major use cases and edge cases for the extension!
 
 **UI Elements Shown:**
 - Same as UC-04 (all functionality available due to caching)
+  - `branchSelector` uses same sorting: most recent activity first, then alphabetical
+  - Same format: "Branch Name (X message[s])" with message counts
 - Additional: "Find Analysis" notification may appear
 
 **Behavior:**
@@ -345,23 +355,23 @@ This covers all the major use cases and edge cases for the extension!
 
 ---
 
-### **UC-10: Copy Branch Operation in Progress**
+### **UC-10: Export Branch Operation in Progress**
 **Conditions:**
 - Valid chat ID exists with analysis data
-- User selects branch and clicks "Copy branch to clipboard"
-- Copy operation is running with progress overlay
+- User selects branch and clicks "Export branch to file"
+- Export operation is running with progress overlay
 - **Popup is closed** (user sees progress overlay on main page)
 
 **Main Page Behavior:**
-- Progress overlay visible with detailed copy progress updates
-- User can see various copy steps: "Preparing branch copy...", "Collecting chat history...", "Processing messages...", etc.
-- Operation completes with success alert
+- Progress overlay visible with detailed export progress updates
+- User can see various export steps: "Preparing branch export...", "Collecting chat history...", "Processing messages...", "Creating file...", etc.
+- Operation completes with file download and success alert
 - User cannot interact with extension until operation completes
 
-**If User Reopens Popup During Copy Operation:**
+**If User Reopens Popup During Export Operation:**
 - Popup shows normal UI with same branch still selected
-- All buttons appear enabled (popup doesn't track active copy operation)
-- **Challenge:** User can potentially trigger conflicting copy operations or other actions
+- All buttons appear enabled (popup doesn't track active export operation)
+- **Challenge:** User can potentially trigger conflicting export operations or other actions
 
 ---
 
@@ -428,12 +438,13 @@ This covers all the major use cases and edge cases for the extension!
 2. `showProgressOverlay()` displays center overlay on main page
 3. `climbAndScrapeHistory()` scrolls through chat
 4. Progress updates: "Scrolling through chat: X/Y messages"
-5. `insertPrompt()` pastes analysis prompt
-6. `hideProgressOverlay()` after 3 seconds
-7. User manually clicks Send in AI Studio
-8. AI responds with analysis
-9. **If user reopens popup during operation:** UC-11 (potential conflicts)
-10. **After operation completes:** Next popup open → UC-04 or UC-05
+5. `exportPromptToFile()` creates and downloads analysis prompt file
+6. `insertPrompt()` pastes short instruction message with filename
+7. `hideProgressOverlay()` after 5 seconds with file export completion message
+8. User manually attaches downloaded file and clicks Send in AI Studio
+9. AI responds with analysis
+10. **If user reopens popup during operation:** UC-11 (potential conflicts)
+11. **After operation completes:** Next popup open → UC-04 or UC-05
 
 ---
 
@@ -459,13 +470,13 @@ This covers all the major use cases and edge cases for the extension!
 
 ---
 
-### **UF-03: Copy Branch Flow**
+### **UF-03: Export Branch Flow**
 **Trigger:** User selects branch + clicks `openBranchButton`
 **Steps:**
 1. `openFilteredBranch(branchName)` called
 2. **Popup closes immediately** - User sees main AI Studio page
-3. **Show progress overlay:** "Copying branch history..."
-4. **Progress Updates:** "Preparing branch copy..." (10%)
+3. **Show progress overlay:** "Exporting branch history..."
+4. **Progress Updates:** "Preparing branch export..." (10%)
 5. Get analysis data (DOM or cache)
 6. **Progress Updates:** "Collecting chat history..." (20%)
 7. `climbAndScrapeHistory()` to collect all messages
@@ -474,10 +485,10 @@ This covers all the major use cases and edge cases for the extension!
 10. Filter messages by branch using `branchMap`
 11. **Progress Updates:** "Formatting branch content..." (85%)
 12. Format as markdown with context
-13. **Progress Updates:** "Copying to clipboard..." (95%)
-14. `copyToClipboardContentScript()` to clipboard
+13. **Progress Updates:** "Creating file..." (95%)
+14. `exportBranchToFile()` creates and downloads timestamped file
 15. **Hide progress overlay**
-16. Success alert: *"The full history for [BRANCH_NAME] thread has been copied to your clipboard. Please paste it into a new chat."*
+16. Success alert: *"The full history for [BRANCH_NAME] thread has been exported to file [filename]. Please attach the file to your new chat."*
 17. **If user reopens popup during operation:** UC-11 (potential conflicts)
 
 ---
@@ -488,16 +499,17 @@ This covers all the major use cases and edge cases for the extension!
 1. Check `currentAnalysisData?.mermaidData`
 2. `createMermaidLiveUrl()` with compression
 3. `chrome.tabs.create()` opens new tab
-4. Fallback: `window.open()` if tabs API fails
+4. Fallback: Export Mermaid file and open mermaid.live for manual import
 
 ---
 
-### **UF-05: Copy JSON/Mermaid Flow**
-**Trigger:** User clicks `copyJsonButton` or `copyMermaidButton`
+### **UF-05: Export JSON/Mermaid Flow**
+**Trigger:** User clicks `exportJsonButton` or `exportMermaidButton`
 **Steps:**
 1. Check `currentAnalysisData?.jsonData` or `mermaidData`
-2. `copyToClipboard()` directly from cache
-3. No additional processing needed
+2. `exportDataToFile()` creates timestamped file with appropriate extension (.json or .mmd)
+3. File automatically downloads with structured data
+4. Success notification confirms file export
 
 ---
 
@@ -567,15 +579,15 @@ This covers all the major use cases and edge cases for the extension!
 
 ---
 
-### **EF-06: Branch Copy Success**
-**Trigger:** Successful branch copy operation
-**Response:** Alert: *"The full history for [BRANCH_NAME] thread has been copied to your clipboard. Please paste it into a new chat."*
+### **EF-06: Branch Export Success**
+**Trigger:** Successful branch export operation
+**Response:** Alert: *"The full history for [BRANCH_NAME] thread has been exported to file [filename]. Please attach the file to your new chat."*
 **Type:** Informational (success notification)
 
 ---
 
 ### **EF-07: Operation Interruption Recovery**
-**Trigger:** User opens popup after page refresh/crash during any operation (analysis, go to branch, copy branch)
+**Trigger:** User opens popup after page refresh/crash during any operation (analysis, go to branch, export branch)
 **Detection:** No active progress overlay, no operation completion flags set
 **Processing:** Extension initializes with fresh state, ignoring any previous operation state
 **Response:** Normal UI with all buttons enabled based on current analysis data availability

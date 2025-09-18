@@ -32,7 +32,7 @@
       <!-- === Modified Text with English Instruction === -->
       <p class="info-text">
         <strong>Tip:</strong> Use "Scroll to Bottom" first to ensure you're at the latest message, then run the analysis.<br><br>
-        This inserts a prompt to generate a graph and prepare branches for filtering.
+        This exports a file with the analysis prompt that you can attach to your message (no input length limits!).
       </p>
     </div>
 
@@ -42,7 +42,7 @@
       <h4>Select branch:</h4>
       <select id="branchSelector"></select>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
-        <button id="openBranchButton" class="action-button">Copy branch</button>
+        <button id="openBranchButton" class="action-button">Export branch</button>
         <button id="goToBranchButton" class="action-button" style="background-color: #16a085;">Go to branch</button>
       </div>
       
@@ -50,12 +50,12 @@
       <div id="mermaidSection" class="hidden" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #34495e;">
         <h4>Visualization Tools:</h4>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px;">
-          <button id="copyJsonButton" class="action-button" style="background-color: #f39c12; font-size: 0.9em;">Copy JSON</button>
-          <button id="copyMermaidButton" class="action-button" style="background-color: #9b59b6; font-size: 0.9em;">Copy Mermaid</button>
+          <button id="copyJsonButton" class="action-button" style="background-color: #f39c12; font-size: 0.9em;">Export JSON</button>
+          <button id="copyMermaidButton" class="action-button" style="background-color: #9b59b6; font-size: 0.9em;">Export Mermaid</button>
           <button id="showGraphButton" class="action-button" style="background-color: #2ecc71; font-size: 0.9em;">Show Graph</button>
         </div>
         <p class="info-text" style="font-size: 0.8em; margin-top: 8px;">
-          Use Mermaid code with <a href="https://mermaid.live" target="_blank" style="color: #3498db;">mermaid.live</a> or <a href="https://github.com/mermaid-js/mermaid-live-editor" target="_blank" style="color: #3498db;">online editors</a>
+          Export files can be used with <a href="https://mermaid.live" target="_blank" style="color: #3498db;">mermaid.live</a> or <a href="https://github.com/mermaid-js/mermaid-live-editor" target="_blank" style="color: #3498db;">online editors</a>
         </p>
       </div>
       
@@ -70,7 +70,7 @@
 
   <!-- Version display in bottom left -->
   <div style="position: fixed; bottom: 5px; left: 5px; font-size: 0.7em; color: #7f8c8d;">
-    v3.1.1
+    v3.2.0
   </div>
 
   <script src="pako.min.js"></script>
