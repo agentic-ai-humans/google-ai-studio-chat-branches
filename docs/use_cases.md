@@ -89,8 +89,7 @@ Sometimes the analysis might get corrupted or deleted:
 2. **Click "Copy branch"** - Shows progress overlay while preparing the branch export
 3. **Wait for completion** - Progress overlay shows steps: preparing, collecting, scrolling, processing, formatting, and exporting
 4. **File download** - A timestamped file is automatically downloaded with the branch content
-5. **Success notification** - Alert confirms the branch has been exported to a file
-6. **Open a new chat** and attach the file - Now you have the full context plus the focused discussion!
+5. **Open a new chat** and attach the file - Now you have the full context plus the focused discussion!
 
 **Why this is useful:**
 - Get complete context for a specific discussion thread
@@ -134,8 +133,8 @@ Sometimes the analysis might get corrupted or deleted:
 **What happened:** Your chat is empty or only has AI "thinking" messages
 **What to do:** Have some actual conversation first, then try analysis
 
-### **Success Messages**
-When you copy a branch, you'll see: *"The full history for [Topic Name] has been exported to file [filename]. Please attach the file to your new chat."*
+### **File Downloads**
+When you export a branch, the file automatically downloads to your default download folder.
 Just attach the downloaded file to a new chat to continue that specific discussion!
 
 ---
@@ -486,8 +485,7 @@ This covers all the major use cases and edge cases for the extension!
 13. **Progress Updates:** "Creating file..." (95%)
 14. `exportBranchToFile()` creates and downloads timestamped file
 15. **Hide progress overlay**
-16. Success alert: *"The full history for [BRANCH_NAME] thread has been exported to file [filename]. Please attach the file to your new chat."*
-17. **If user reopens popup during operation:** UC-11 (potential conflicts)
+16. **If user reopens popup during operation:** UC-11 (potential conflicts)
 
 ---
 
@@ -507,7 +505,6 @@ This covers all the major use cases and edge cases for the extension!
 1. Check `currentAnalysisData?.jsonData` or `mermaidData`
 2. `exportDataToFile()` creates timestamped file with appropriate extension (.json or .mmd)
 3. File automatically downloads with structured data
-4. Success notification confirms file export
 
 ---
 
@@ -579,8 +576,8 @@ This covers all the major use cases and edge cases for the extension!
 
 ### **EF-06: Branch Export Success**
 **Trigger:** Successful branch export operation
-**Response:** Alert: *"The full history for [BRANCH_NAME] thread has been exported to file [filename]. Please attach the file to your new chat."*
-**Type:** Informational (success notification)
+**Response:** File download completes automatically (no alert needed)
+**Type:** Silent success (user sees file download)
 
 ---
 
