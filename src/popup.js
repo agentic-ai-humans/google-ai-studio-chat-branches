@@ -216,8 +216,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   showGraphButton?.addEventListener('click', () => {
     if (currentAnalysisData?.mermaidData) {
-      const mermaidUrl = `https://mermaid.live/edit#pako:${btoa(currentAnalysisData.mermaidData)}`;
-      chrome.tabs.create({ url: mermaidUrl });
+      console.log('SG: Mermaid data available:', !!currentAnalysisData.mermaidData);
+      console.log('SG: Mermaid preview:', currentAnalysisData.mermaidData.substring(0, 100) + '...');
+      
+      try {
+        const base64Data = btoa(currentAnalysisData.mermaidData.trim());
+        const mermaidUrl = `https://mermaid.live/edit#base64:${base64Data}`;
+        console.log('SG: Opening mermaid.live with URL length:', mermaidUrl.length);
+        chrome.tabs.create({ url: mermaidUrl });
+      } catch (err) {
+        console.error('SG: Failed to create mermaid URL:', err);
+      }
+    } else {
+      console.log('SG: No Mermaid data available');
     }
   });
 
