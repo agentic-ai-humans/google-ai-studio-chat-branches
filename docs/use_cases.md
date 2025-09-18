@@ -427,6 +427,34 @@ This covers all the major use cases and edge cases for the extension!
 
 ---
 
+### **UC-13: Page Refresh Detected**
+**Conditions:**
+- Valid chat ID exists with cached analysis data
+- User opens popup after page refresh
+- Stored turn-ids don't exist in current DOM
+- Analysis data exists but navigation would fail
+
+**UI Elements Shown:**
+- `mainView` (visible)
+- `mainControls` (visible) - Normal analysis buttons available
+- `filteringView` (visible) - Branch dropdown populated but navigation disabled
+- `mermaidSection` (visible) - Export buttons work normally
+- **Refresh notification banner**: Prominent message about ID mismatch
+- **"Refresh Mappings" button**: Primary action button to fix navigation
+
+**UI Elements Behavior:**
+- **Export operations work**: JSON/Mermaid export uses cached data (unaffected)
+- **Navigation disabled**: "Go to branch" and "Export branch" show refresh message
+- **Analysis available**: "New Analysis" works normally
+- **Clear messaging**: User understands exactly what to do
+
+**User Experience:**
+- **Immediate clarity**: User sees why navigation isn't working
+- **Simple solution**: One button click to fix
+- **No data loss**: All analysis data preserved
+
+---
+
 ## **User Action Flows**
 
 ### **UF-01: New Analysis Flow**
@@ -622,16 +650,23 @@ This covers all the major use cases and edge cases for the extension!
 ---
 
 ### **EF-10: Page Refresh Detection**
-**Trigger:** User refreshes page, stored turn-ids no longer exist in DOM
-**Detection:** `document.getElementById(storedTurnId)` returns null for cached turn-ids
+**Trigger:** User tries to use navigation features after page refresh
+**Detection Points:**
+1. **Go to Branch**: User clicks `goToBranchButton` → `document.getElementById(storedTurnId)` returns null
+2. **Export Branch**: User clicks `openBranchButton` → stored turn-ids don't exist in DOM
+3. **Popup Initialization**: Extension checks cached turn-ids against current DOM on popup open
+
 **Processing:**
-1. **Show refresh notification**: *"Page was refreshed and chat IDs changed. Click 'Refresh Mappings' to update the analysis data."*
-2. **User confirmation**: User clicks "Refresh Mappings" button
-3. **Trigger analysis**: Run full analysis operation (UF-01) to regenerate mappings
-4. **Update internal data**: Replace old turn-id mappings with new ones
-5. **Preserve existing analysis**: Old JSON/Mermaid in chat remains unchanged
-**Response:** *"Mappings updated successfully. You can now use branch navigation."*
-**User Impact:** **Simple solution** - one-click refresh, all features restored
+1. **Immediate detection**: Check turn-id existence before attempting navigation
+2. **Show refresh popup**: *"Page was refreshed and chat IDs changed. Click 'Refresh Mappings' to update the analysis data."*
+3. **User confirmation**: User clicks "Refresh Mappings" button in popup
+4. **Trigger analysis**: Run full analysis operation (UF-01) to regenerate mappings
+5. **Update internal data**: Replace old turn-id mappings with new ones
+6. **Preserve existing analysis**: Old JSON/Mermaid in chat remains unchanged
+7. **Auto-retry**: Automatically retry the original operation (go to branch/export branch)
+
+**Response:** *"Mappings updated successfully."* + original operation completes
+**User Impact:** **Seamless experience** - one-click fix, operation continues automatically
 
 ---
 
