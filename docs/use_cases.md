@@ -451,19 +451,25 @@ This covers all the major use cases and edge cases for the extension!
 1. `goToBranch(branchName)` called
 2. Try `getLatestAnalysisFromDom()` first
 3. If not found, use cached `branchMap`
-4. Find target turn IDs for selected branch
-5. **Direct DOM Search:** Try to find turn element directly in current DOM using `document.getElementById(turnId)`
-6. **If found directly:** 
+4. **Refresh Detection:** Check if stored turn-ids exist in current DOM
+5. **If turn-ids exist:** Use direct DOM search with `document.getElementById(turnId)`
+6. **If turn-ids don't exist (page refreshed):**
+   - Show popup message: *"Page was refreshed and chat IDs changed. Click 'Refresh Mappings' to update the analysis data."*
+   - User clicks "Refresh Mappings" button
+   - **Trigger UF-01**: Run analysis operation to regenerate mappings
+   - **No new chat message**: Just updates internal JSON mapping
+7. **Direct DOM Search:** Try to find turn element using current turn-ids
+8. **If found directly:** 
    - Jump to turn immediately, highlight with yellow background for 2 seconds
    - **Popup remains open** (no long operation needed)
-7. **If not found in current DOM:** 
+9. **If not found in current DOM:** 
    - **Popup closes immediately** - User sees main AI Studio page
    - Show progress overlay: "Searching for branch messages..."
-8. **Careful Navigation:** Step by step scroll from bottom to top through chat history
-9. **Progress Updates:** "Searching through chat: X/Y messages processed"
-10. **When target found:** Hide progress overlay, `scrollIntoView()` to target turn
-11. Highlight with yellow background for 2 seconds
-12. **If user reopens popup during search:** UC-11 (potential conflicts)
+10. **Careful Navigation:** Step by step scroll from bottom to top through chat history
+11. **Progress Updates:** "Searching through chat: X/Y messages processed"
+12. **When target found:** Hide progress overlay, `scrollIntoView()` to target turn
+13. Highlight with yellow background for 2 seconds
+14. **If user reopens popup during search:** UC-11 (potential conflicts)
 
 ---
 
@@ -615,6 +621,20 @@ This covers all the major use cases and edge cases for the extension!
 
 ---
 
+### **EF-10: Page Refresh Detection**
+**Trigger:** User refreshes page, stored turn-ids no longer exist in DOM
+**Detection:** `document.getElementById(storedTurnId)` returns null for cached turn-ids
+**Processing:**
+1. **Show refresh notification**: *"Page was refreshed and chat IDs changed. Click 'Refresh Mappings' to update the analysis data."*
+2. **User confirmation**: User clicks "Refresh Mappings" button
+3. **Trigger analysis**: Run full analysis operation (UF-01) to regenerate mappings
+4. **Update internal data**: Replace old turn-id mappings with new ones
+5. **Preserve existing analysis**: Old JSON/Mermaid in chat remains unchanged
+**Response:** *"Mappings updated successfully. You can now use branch navigation."*
+**User Impact:** **Simple solution** - one-click refresh, all features restored
+
+---
+
 ## **Storage Schema**
 
 ### **Reference Data**
@@ -631,12 +651,13 @@ This covers all the major use cases and edge cases for the extension!
   "analysis_data_chat_abc123": {
     "turnId": "turn-456789",
     "timestamp": 1672531200000,
-    "jsonData": "{\"type\":\"gitGraph\",\"actions\":[...]}",
-    "mermaidData": "gitGraph\n    commit id: \"Initial\"...",
+    "jsonData": "{\"type\":\"gitGraph\",\"actions\":[...]}",  // Uses integer IDs (1, 2, 3)
+    "mermaidData": "gitGraph\n    commit id: \"Initial\"...", // Uses integer IDs (1, 2, 3)
     "branchMap": {
-      "turn-123": { "thread": "Feature A", "turnId": "turn-123" },
-      "turn-456": { "thread": "Bug Fix", "turnId": "turn-456" }
-    }
+      "1": { "thread": "Feature A", "messageId": 1 },
+      "3": { "thread": "Bug Fix", "messageId": 3 }
+    },
+    "currentTurnIds": ["turn-123", "turn-456", "turn-789"] // For refresh detection
   }
 }
 ```
