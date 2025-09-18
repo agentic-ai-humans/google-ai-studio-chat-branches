@@ -164,6 +164,110 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // UC-13: Check for page refresh by comparing stored turn-ids with current DOM
+  function checkForPageRefresh(chatId, callback) {
+    if (!chatId) {
+      callback(false);
+      return;
+    }
+    
+    sendMessageToContentScript({ action: 'getAnalysisData' }, (response) => {
+      if (response && response.hasData && response.source === 'cache') {
+        // We have cached data, check if stored turn-ids still exist
+        chrome.storage.local.get([`analysis_data_${chatId}`], (data) => {
+          const cachedData = data[`analysis_data_${chatId}`];
+          if (cachedData && cachedData.currentTurnIds) {
+            // Check if any of the stored turn-ids exist in current DOM
+            sendMessageToContentScript({ 
+              action: 'checkTurnIdsExist', 
+              turnIds: cachedData.currentTurnIds 
+            }, (checkResponse) => {
+              const refreshDetected = !(checkResponse && checkResponse.anyExist);
+              callback(refreshDetected);
+            });
+          } else {
+            callback(false); // No stored turn-ids to check
+          }
+        });
+      } else {
+        callback(false); // No cached data or data is from DOM (fresh)
+      }
+    });
+  }
+
+  // UC-13: Show refresh detection modal
+  function showRefreshDetectionModal(chatId) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'refresh-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    
+    modal.innerHTML = `
+      <div style="
+        background: #2c3e50;
+        color: #ecf0f1;
+        padding: 25px;
+        border-radius: 10px;
+        max-width: 280px;
+        text-align: center;
+        border: 2px solid #3498db;
+      ">
+        <div style="margin-bottom: 15px; font-size: 16px; font-weight: bold; color: #3498db;">
+          🔄 Page Refresh Detected
+        </div>
+        <div style="margin-bottom: 20px; font-size: 14px; line-height: 1.4;">
+          Page was refreshed and chat IDs changed. Click 'Refresh Mappings' to update the analysis data.
+        </div>
+        <button id="refreshMappingsBtn" style="
+          background: #3498db;
+          color: white;
+          border: none;
+          padding: 12px 20px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+          margin-right: 10px;
+        ">Refresh Mappings</button>
+        <button id="cancelRefreshBtn" style="
+          background: #95a5a6;
+          color: white;
+          border: none;
+          padding: 12px 20px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+        ">Cancel</button>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Handle button clicks
+    modal.querySelector('#refreshMappingsBtn').addEventListener('click', () => {
+      modal.remove();
+      // Trigger analysis to refresh mappings
+      sendMessageToContentScript({ action: 'analyzeAndPrepare' });
+      window.close(); // Close popup to show progress overlay
+    });
+    
+    modal.querySelector('#cancelRefreshBtn').addEventListener('click', () => {
+      modal.remove();
+      // Continue with normal initialization but navigation won't work
+      proceedWithNormalInitialization();
+    });
+  }
+
   // --- Helper Functions ---
   function sendMessageToContentScript(message, callback) {
     if (!activeTabId) {
@@ -596,22 +700,35 @@ document.addEventListener('DOMContentLoaded', () => {
         mainView.classList.remove('hidden');
         incorrectDomainView.classList.add('hidden');
         
-        // UF-06: Check for active operations before initializing popup
-        checkForActiveOperation((hasActiveOperation) => {
-          if (hasActiveOperation) {
-            // UC-11: Active operation detected - disable all buttons and show status message
-            console.log('Active operation detected - disabling popup functionality');
-            disableAllButtons();
-            showOperationInProgressMessage();
-            // Still load analysis data for UI structure, but keep buttons disabled
-            loadAnalysisData();
+        // UC-13: Check for page refresh before initializing popup
+        checkForPageRefresh(response.chatId, (refreshDetected) => {
+          if (refreshDetected) {
+            // Show refresh detection modal
+            showRefreshDetectionModal(response.chatId);
           } else {
-            // UC-11/UC-12: No active operation - normal initialization
-            console.log('No active operation - normal popup initialization');
-            loadAnalysisData();
-            enableAllButtons();
+            // Continue with normal initialization
+            proceedWithNormalInitialization();
           }
         });
+        
+        function proceedWithNormalInitialization() {
+          // UF-06: Check for active operations before initializing popup
+          checkForActiveOperation((hasActiveOperation) => {
+            if (hasActiveOperation) {
+              // UC-11: Active operation detected - disable all buttons and show status message
+              console.log('Active operation detected - disabling popup functionality');
+              disableAllButtons();
+              showOperationInProgressMessage();
+              // Still load analysis data for UI structure, but keep buttons disabled
+              loadAnalysisData();
+            } else {
+              // UC-11/UC-12: No active operation - normal initialization
+              console.log('No active operation - normal popup initialization');
+              loadAnalysisData();
+              enableAllButtons();
+            }
+          });
+        }
       } else {
         console.log('Not a valid chat page or new chat');
         // UC-01, UC-02: Wrong domain or new chat - show error

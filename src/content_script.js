@@ -320,6 +320,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const hasActiveOverlay = !!(progressOverlay && document.getElementById('chat-analysis-progress'));
       sendResponse({ hasActiveOverlay: hasActiveOverlay });
       break;
+    case 'checkTurnIdsExist':
+      // Check if any of the provided turn-ids exist in current DOM
+      const turnIds = request.turnIds || [];
+      const anyExist = turnIds.some(turnId => document.getElementById(turnId));
+      sendResponse({ anyExist: anyExist });
+      break;
   }
   return true;
 });
@@ -1101,7 +1107,7 @@ function processScrapedHistory(scrapedHistory, options = {}) {
         processedHistory.push(processedMessage);
         
         if (includeInPrompt) {
-          historyForPrompt += `MESSAGE ${messageSequence} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${placeholderText}\n\n---\n\n`;
+          historyForPrompt += `MESSAGE ${messageSequence} (${message.role}):\n${placeholderText}\n\n---\n\n`;
         }
       } else {
         // Regular message - include normally
@@ -1125,7 +1131,7 @@ function processScrapedHistory(scrapedHistory, options = {}) {
             messageText = attachmentInfo + (messageText ? '\n\n' + messageText : '');
           }
           
-          historyForPrompt += `MESSAGE ${messageSequence} [id: ${message.turnId || 'unknown'}] (${message.role}):\n${messageText}\n\n---\n\n`;
+          historyForPrompt += `MESSAGE ${messageSequence} (${message.role}):\n${messageText}\n\n---\n\n`;
         }
       }
   });
@@ -1332,7 +1338,8 @@ function storeAnalysisData(turnElement, analysisData) {
         timestamp: timestamp,
         jsonData: analysisData.json,
         mermaidData: analysisData.mermaid,
-        branchMap: analysisData.branchMap
+        branchMap: analysisData.branchMap,
+        currentTurnIds: Array.from(document.querySelectorAll('ms-chat-turn')).map(turn => turn.id).filter(id => id)
       }
     });
     console.log(`Stored analysis data cache: ${turnId} for chat ${chatId}`);
