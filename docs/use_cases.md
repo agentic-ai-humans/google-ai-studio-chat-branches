@@ -427,31 +427,29 @@ This covers all the major use cases and edge cases for the extension!
 
 ---
 
-### **UC-13: Page Refresh Detected**
+### **UC-13: Page Refresh Detected (Popup Open)**
 **Conditions:**
 - Valid chat ID exists with cached analysis data
-- User opens popup after page refresh
+- **User opens extension popup** after page refresh
 - Stored turn-ids don't exist in current DOM
 - Analysis data exists but navigation would fail
 
 **UI Elements Shown:**
-- `mainView` (visible)
-- `mainControls` (visible) - Normal analysis buttons available
-- `filteringView` (visible) - Branch dropdown populated but navigation disabled
-- `mermaidSection` (visible) - Export buttons work normally
-- **Refresh notification banner**: Prominent message about ID mismatch
-- **"Refresh Mappings" button**: Primary action button to fix navigation
+- **Refresh detection popup** (modal overlay within extension popup)
+- Message: *"Page was refreshed and chat IDs changed. Click 'Refresh Mappings' to update the analysis data."*
+- **"Refresh Mappings" button** (primary action)
+- **"Cancel" button** (dismiss, but navigation won't work)
+- Background popup dimmed/disabled
 
-**UI Elements Behavior:**
-- **Export operations work**: JSON/Mermaid export uses cached data (unaffected)
-- **Navigation disabled**: "Go to branch" and "Export branch" show refresh message
-- **Analysis available**: "New Analysis" works normally
-- **Clear messaging**: User understands exactly what to do
+**UI Elements Hidden:**
+- Normal popup interface temporarily hidden behind refresh detection modal
+- All navigation buttons inaccessible until refresh handled
 
 **User Experience:**
-- **Immediate clarity**: User sees why navigation isn't working
-- **Simple solution**: One button click to fix
-- **No data loss**: All analysis data preserved
+- **Immediate detection**: User sees refresh popup as soon as they open extension
+- **Clear explanation**: User understands what happened and why
+- **Simple solution**: One button click to fix everything
+- **Proactive handling**: Issue resolved before user tries to navigate
 
 ---
 
@@ -650,23 +648,21 @@ This covers all the major use cases and edge cases for the extension!
 ---
 
 ### **EF-10: Page Refresh Detection**
-**Trigger:** User tries to use navigation features after page refresh
-**Detection Points:**
-1. **Go to Branch**: User clicks `goToBranchButton` → `document.getElementById(storedTurnId)` returns null
-2. **Export Branch**: User clicks `openBranchButton` → stored turn-ids don't exist in DOM
-3. **Popup Initialization**: Extension checks cached turn-ids against current DOM on popup open
+**Trigger:** User opens extension popup after page refresh
+**Detection Point:** **Popup initialization** - Extension checks cached turn-ids against current DOM
 
 **Processing:**
-1. **Immediate detection**: Check turn-id existence before attempting navigation
-2. **Show refresh popup**: *"Page was refreshed and chat IDs changed. Click 'Refresh Mappings' to update the analysis data."*
-3. **User confirmation**: User clicks "Refresh Mappings" button in popup
-4. **Trigger analysis**: Run full analysis operation (UF-01) to regenerate mappings
-5. **Update internal data**: Replace old turn-id mappings with new ones
-6. **Preserve existing analysis**: Old JSON/Mermaid in chat remains unchanged
-7. **Auto-retry**: Automatically retry the original operation (go to branch/export branch)
+1. **Immediate detection**: Check turn-id existence during popup initialization
+2. **Show refresh modal**: Modal overlay within popup with clear message
+3. **User confirmation**: User clicks "Refresh Mappings" button
+4. **Close popup**: Extension popup closes to show progress overlay
+5. **Trigger analysis**: Run full analysis operation (UF-01) to regenerate mappings
+6. **Update internal data**: Replace old turn-id mappings with new ones
+7. **Preserve existing analysis**: Old JSON/Mermaid in chat remains unchanged
+8. **Completion**: User can reopen popup with fully functional navigation
 
-**Response:** *"Mappings updated successfully."* + original operation completes
-**User Impact:** **Seamless experience** - one-click fix, operation continues automatically
+**Response:** Analysis operation completes, mappings updated, navigation restored
+**User Impact:** **Proactive solution** - issue detected and resolved immediately on popup open
 
 ---
 
